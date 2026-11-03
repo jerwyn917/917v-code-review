@@ -1,0 +1,23 @@
+{
+  "fixture": "spring-bank-api",
+  "secrets": ["B4nk-Pr0d-Passw0rd!"],
+  "seeded": [
+    {"key": "sql-injection-native-query", "file": "src/main/java/com/acme/bank/repository/AccountSearchRepositoryImpl.java", "pattern": "createNativeQuery", "categories": ["Security"]},
+    {"key": "permit-all-csrf-disabled", "file": "src/main/java/com/acme/bank/config/SecurityConfig.java", "pattern": ".anyRequest().permitAll()", "window": 4, "categories": ["Security"]},
+    {"key": "cors-wildcard", "file": "src/main/java/com/acme/bank/controller/AccountController.java", "pattern": "@CrossOrigin(\"*\")", "categories": ["Security"]},
+    {"key": "plaintext-db-password", "file": "src/main/resources/application.properties", "pattern": "spring.datasource.password", "categories": ["Security", "DevOps & Infrastructure"]},
+    {"key": "actuator-exposed-stacktraces", "file": "src/main/resources/application.properties", "pattern": "management.endpoints.web.exposure.include", "window": 2, "categories": ["Security", "DevOps & Infrastructure"]},
+    {"key": "transfer-not-transactional", "file": "src/main/java/com/acme/bank/service/TransferService.java", "pattern": "public void transfer", "window": 12, "categories": ["API & Backend", "Database"]},
+    {"key": "transactional-on-private", "file": "src/main/java/com/acme/bank/service/TransferService.java", "pattern": "private void audit", "window": 2, "categories": ["Architecture", "Code Quality", "API & Backend", "Database"]},
+    {"key": "money-as-double", "file": "src/main/java/com/acme/bank/model/Account.java", "pattern": "private double balance", "alt_files": ["src/main/resources/db/migration/V1__init.sql"], "window": 3, "categories": ["Database", "API & Backend"]},
+    {"key": "eager-n-plus-one", "file": "src/main/java/com/acme/bank/service/TransferService.java", "pattern": "for (Transaction t : a.getTransactions())", "alt_files": ["src/main/java/com/acme/bank/model/Account.java"], "window": 4, "categories": ["Performance", "Database"]},
+    {"key": "entity-returned-from-controller", "file": "src/main/java/com/acme/bank/controller/AccountController.java", "pattern": "public Account get(", "window": 12, "categories": ["API & Backend", "Security"]},
+    {"key": "error-200-printstacktrace", "file": "src/main/java/com/acme/bank/controller/AccountController.java", "pattern": "e.printStackTrace()", "window": 2, "categories": ["API & Backend", "Code Quality", "Security"]},
+    {"key": "ddl-auto-update", "file": "src/main/resources/application.properties", "pattern": "ddl-auto=update", "categories": ["Database", "DevOps & Infrastructure"]},
+    {"key": "unsafe-migration", "file": "src/main/resources/db/migration/V2__currency.sql", "pattern": "", "window": 3, "categories": ["Database"]},
+    {"key": "missing-fk-index", "file": "src/main/resources/db/migration/V1__init.sql", "pattern": "account_id BIGINT", "window": 10, "categories": ["Database"]},
+    {"key": "transfer-untested", "file": "src/main/java/com/acme/bank/service/TransferService.java", "pattern": "", "window": 100, "alt_files": ["src/test/java/com/acme/bank/BankApplicationTests.java"], "categories": ["Testing"]},
+    {"key": "field-injection", "file": "src/main/java/com/acme/bank/service/TransferService.java", "pattern": "@Autowired", "alt_files": ["src/main/java/com/acme/bank/controller/AccountController.java"], "window": 6, "categories": ["Architecture", "Code Quality"]},
+    {"key": "dockerfile-root-single-stage", "file": "Dockerfile", "pattern": "", "window": 10, "categories": ["DevOps & Infrastructure"]}
+  ]
+}

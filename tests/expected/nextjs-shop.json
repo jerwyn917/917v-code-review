@@ -1,0 +1,21 @@
+{
+  "fixture": "nextjs-shop",
+  "secrets": ["pk_shop_live_7Hc2Qm9xVb41LpZr0aTe"],
+  "seeded": [
+    {"key": "sql-injection-orders", "file": "app/api/orders/route.ts", "pattern": "$queryRawUnsafe", "categories": ["Security"]},
+    {"key": "orders-api-no-auth", "file": "app/api/orders/route.ts", "pattern": "", "window": 40, "categories": ["Security", "API & Backend"]},
+    {"key": "server-action-no-auth", "file": "app/actions.ts", "pattern": "export async function deleteProduct", "window": 4, "categories": ["Security"]},
+    {"key": "stored-xss-reviews", "file": "components/ReviewList.tsx", "pattern": "dangerouslySetInnerHTML", "categories": ["Security"]},
+    {"key": "token-in-localstorage", "file": "components/Cart.tsx", "pattern": "localStorage.setItem", "categories": ["Security"]},
+    {"key": "hardcoded-payment-key", "file": "lib/payments.ts", "pattern": "const paymentApiKey", "categories": ["Security"]},
+    {"key": "error-200-and-leak", "file": "app/api/orders/route.ts", "pattern": "return NextResponse.json({ error", "window": 2, "categories": ["API & Backend", "Security"]},
+    {"key": "prisma-client-per-call", "file": "lib/db.ts", "pattern": "new PrismaClient()", "categories": ["Performance", "Database", "Architecture"]},
+    {"key": "n-plus-one-ratings", "file": "app/page.tsx", "pattern": "for (const p of products)", "window": 3, "categories": ["Performance"]},
+    {"key": "effect-without-deps", "file": "components/Cart.tsx", "pattern": "fetch(`/api/stock", "window": 5, "categories": ["Frontend", "Performance"]},
+    {"key": "derived-state-total", "file": "components/Cart.tsx", "pattern": "setTotal(quantity * price)", "window": 4, "categories": ["Frontend"]},
+    {"key": "index-key", "file": "components/ReviewList.tsx", "pattern": "key={index}", "categories": ["Frontend"]},
+    {"key": "a11y-div-onclick-img-alt", "file": "components/Cart.tsx", "pattern": "<img src=", "window": 6, "categories": ["Frontend"]},
+    {"key": "prisma-missing-indexes-unique", "file": "prisma/schema.prisma", "pattern": "", "window": 60, "categories": ["Database"]},
+    {"key": "no-tests", "file": "package.json", "pattern": "", "window": 40, "alt_files": ["app/api/orders/route.ts", "app/actions.ts", "lib/payments.ts"], "categories": ["Testing"]}
+  ]
+}

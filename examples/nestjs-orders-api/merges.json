@@ -1,0 +1,14 @@
+[
+  {"keep": {"agent": "security-reviewer", "title": "Order prices and quantities trusted from the client (balance manipulation)"},
+   "merge": {"agent": "backend-reviewer", "title": "Order total computed from client-supplied item prices"},
+   "reason": "same root cause: client-controlled price feeds the debit; exploit-enabling validation is owned by security"},
+  {"keep": {"agent": "backend-reviewer", "title": "POST /orders returns 201 for validation errors and all failures"},
+   "merge": {"agent": "architecture-reviewer", "title": "Swallowed exception in the place-order handler hides failed money writes"},
+   "reason": "same try/catch block; one fix (throw Nest exceptions, remove empty catch)"},
+  {"keep": {"agent": "backend-reviewer", "title": "placeOrder debits balance and writes order without a transaction"},
+   "merge": {"agent": "database-reviewer", "title": "Balance debit is an unlocked read-modify-write (lost update)"},
+   "reason": "same fix: one transaction with a row lock or conditional atomic debit"},
+  {"keep": {"agent": "performance-reviewer", "title": "Unbounded full-table fetch of all orders on GET /orders"},
+   "merge": {"agent": "backend-reviewer", "title": "Collection endpoints have no pagination"},
+   "reason": "same unbounded listAll(); pagination fixes both"}
+]

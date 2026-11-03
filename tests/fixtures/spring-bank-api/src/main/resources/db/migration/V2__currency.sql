@@ -1,0 +1,2 @@
+ALTER TABLE account DROP COLUMN legacy_ref;
+ALTER TABLE account ADD COLUMN currency VARCHAR(3) NOT NULL;

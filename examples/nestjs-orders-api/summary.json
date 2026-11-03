@@ -1,0 +1,44 @@
+{
+  "repository": "nestjs-orders-api",
+  "review_type": "Full codebase review",
+  "scope_description": "entire repository (22 files)",
+  "agents_run": ["architecture-reviewer", "security-reviewer", "performance-reviewer", "backend-reviewer", "database-reviewer", "testing-reviewer", "devops-reviewer"],
+  "agents_skipped": [{"agent": "frontend-reviewer", "reason": "no frontend framework or UI component files detected"}],
+  "overall_summary": "The Orders API is a small NestJS 10 service (Auth, Users, Orders modules on TypeORM/PostgreSQL) that debits a user's balance when an order is placed. Module structure is clean and controllers are mostly thin, but the service is not safe to expose. Authentication can be forged (SEC-002), an unauthenticated endpoint is SQL-injectable (SEC-004), clients choose their own prices (SEC-003), and production credentials are committed in three places (SEC-001, SEC-005, OPS-001, OPS-002). The money path (placeOrder) has no transaction, no locking and no tests (API-002, TEST-002).",
+  "health_assessment": "The rating is driven by four confirmed Critical security defects that are each exploitable without credentials, plus fourteen High findings concentrated in the order/balance flow and the deployment setup. The codebase is small and conventionally structured, so most fixes are local: verify JWTs, parameterize one query, validate DTOs, wrap placeOrder in a transaction, and move secrets to configuration.",
+  "architecture_overview": "Three feature modules (`auth`, `users`, `orders`) follow Nest conventions, each with its own module, controller and service, plus TypeORM entities. Requests flow controller → service → TypeORM repository. `AuthModule` depends one-way on `UsersModule`. `UsersModule` and `OrdersModule` depend on each other through `forwardRef` (ARC-004) because `UsersService.getProfileWithOrders` composes order data. Business rules leak into `OrdersController` (discount and validation, ARC-002), and the balance debit is implemented in `OrdersService` against another module's entity (ARC-003). Token issuing and verification are split between `AuthService` and a free-standing `JwtGuard` that shares no configuration (ARC-001).",
+  "dependency_analysis": "`scripts/import-graph.py` found 27 internal import edges and three cycles:\n\n- `src/orders/orders.service.ts` ↔ `src/users/users.service.ts`: a real design cycle (ARC-004)\n- `src/orders/orders.module.ts` ↔ `src/users/users.module.ts`: the module-level mirror of the same cycle, papered over with `forwardRef` (ARC-004)\n- `src/orders/order.entity.ts` ↔ `src/users/user.entity.ts`: the standard TypeORM bidirectional relation with lazy types, which is benign\n\nRemoving `getProfileWithOrders` from `UsersService` makes the dependency one-way (Orders → Users) and removes both `forwardRef`s.",
+  "security_overview": "Authentication is a hand-written `JwtGuard` that only *decodes* tokens (SEC-002), applied to a single route (POST /orders). Every read endpoint is public, with no ownership checks (SEC-007), and returns full entities including password hashes (SEC-008), which are unsalted MD5 (SEC-006). The only raw SQL in the codebase is injectable and reachable anonymously (SEC-004). Order totals come from client-supplied prices, so a negative price credits the balance (SEC-003). Secrets: the database password is in `app.module.ts` and `.env` (SEC-001, OPS-001) and the JWT signing key is in `auth.service.ts` and the Dockerfile (SEC-005, OPS-002). Rotate all of them; moving them is not enough.",
+  "owasp_notes": {
+    "A01": "No guards or ownership checks on read endpoints; full entities exposed",
+    "A02": "Unsalted MD5 password hashing; hard-coded signing key",
+    "A03": "Raw SQL template string in UsersService.search",
+    "A04": "Client-controlled prices in the money path",
+    "A05": "Secrets in .env and image ENV; permissive CORS; no helmet",
+    "A06": "Not assessed online (no network authorization); no lockfile committed (OPS-006)",
+    "A07": "Signature never verified; tokens never expire; no login throttling",
+    "A08": "No deserialization or unsigned-webhook surface found",
+    "A09": "Failures in POST /orders are swallowed with no logging (API-001)",
+    "A10": "No outbound HTTP calls found"
+  },
+  "strategic_recommendations": [
+    {"title": "Make authentication real, then apply it by default", "detail": "Replace the hand-written guard with @nestjs/jwt (`JwtService.verifyAsync`) configured once in AuthModule from ConfigService, register it as a global `APP_GUARD` with an `@Public()` decorator for login, and add ownership checks in the services.", "related": ["SEC-002", "SEC-005", "SEC-007", "SEC-010", "ARC-001"]},
+    {"title": "Make placeOrder a single, server-priced transaction", "detail": "Accept only `{ sku, quantity }` through a validated DTO, price items server-side, and perform the conditional debit, the order insert and a bulk item insert inside one `dataSource.transaction`, keyed by an idempotency key. Then cover it with unit and e2e tests.", "related": ["SEC-003", "API-002", "API-005", "PERF-003", "DB-006", "TEST-002", "ARC-003"]},
+    {"title": "Move every secret and setting into validated configuration", "detail": "Adopt @nestjs/config with a schema that requires DB_* and JWT_SECRET, use `TypeOrmModule.forRootAsync`, delete `.env` and the Dockerfile ENV, add `.gitignore`, `.dockerignore` and `.env.example`, and rotate the exposed credentials.", "related": ["SEC-001", "SEC-005", "OPS-001", "OPS-002", "OPS-010"]},
+    {"title": "Switch schema management to migrations and fix the money types", "detail": "Turn off `synchronize`, generate a baseline migration, then migrate money columns to `numeric(12,2)` or integer cents and add constraints (unique email, FK on order items, non-negative balance, indexes).", "related": ["DB-001", "DB-002", "DB-003", "DB-004", "DB-005", "DB-006"]},
+    {"title": "Turn CI into a real gate", "detail": "Commit a lockfile, add @nestjs/cli, fix the Jest config, run `npm ci`, tests and `npm audit` on pull requests, and pin actions and the Node image to the same LTS.", "related": ["OPS-003", "OPS-004", "OPS-005", "OPS-006", "TEST-003", "OPS-007"]}
+  ],
+  "positive_observations": [
+    "Clear module boundaries: each feature folder has its own module, controller, service and entity",
+    "UsersController and AuthController are thin and follow the README's layering convention",
+    "Constructor injection is used consistently, with no field injection",
+    "Login returns one generic error for unknown email and wrong password, so it does not enable user enumeration",
+    "Repository lookups outside UsersService.search use parameterized TypeORM where clauses"
+  ],
+  "limitations": [
+    "Static review only: no code was executed, built or tested, and no coverage figures are claimed",
+    "Dependency vulnerabilities were not checked online (no network authorization); OPS-004 recommends `npm audit` in CI",
+    "In this validation run the reviewer agents had only the Read tool available (Grep/Glob were not provided by the host), so they located files by path; all 22 repository files were read by at least one agent",
+    "25 same-location pairs reported by different agents were reviewed by the orchestrator and kept separate as distinct issues; 4 true duplicates were merged (see validation notes)"
+  ]
+}

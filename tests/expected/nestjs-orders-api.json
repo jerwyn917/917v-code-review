@@ -1,0 +1,25 @@
+{
+  "fixture": "nestjs-orders-api",
+  "secrets": ["Pr0d-Orders-DB-2024!", "orders-jwt-signing-key-9f8e7d6c"],
+  "seeded": [
+    {"key": "sql-injection-search", "file": "src/users/users.service.ts", "pattern": "ILIKE '%${q}%'", "categories": ["Security"]},
+    {"key": "jwt-decode-no-verify", "file": "src/auth/jwt.guard.ts", "pattern": "jwt.decode(token)", "categories": ["Security"]},
+    {"key": "hardcoded-jwt-secret", "file": "src/auth/auth.service.ts", "pattern": "const JWT_SECRET", "categories": ["Security"]},
+    {"key": "md5-password-hash", "file": "src/auth/auth.service.ts", "pattern": "createHash('md5')", "categories": ["Security"]},
+    {"key": "hardcoded-db-password", "file": "src/app.module.ts", "pattern": "password: '", "categories": ["Security", "DevOps & Infrastructure"]},
+    {"key": "typeorm-synchronize", "file": "src/app.module.ts", "pattern": "synchronize: true", "categories": ["Database", "DevOps & Infrastructure"]},
+    {"key": "unguarded-user-endpoints-idor", "file": "src/users/users.controller.ts", "pattern": "@Get(':id')", "window": 6, "categories": ["Security", "API & Backend"]},
+    {"key": "no-global-validation", "file": "src/orders/orders.controller.ts", "pattern": "@Body() body: any", "alt_files": ["src/main.ts"], "categories": ["API & Backend", "Security"]},
+    {"key": "n-plus-one-order-items", "file": "src/orders/orders.service.ts", "pattern": "for (const order of orders)", "window": 3, "categories": ["Performance"]},
+    {"key": "place-order-no-transaction", "file": "src/orders/orders.service.ts", "pattern": "await this.users.save(user)", "window": 8, "categories": ["API & Backend", "Database"]},
+    {"key": "swallowed-exception-create-order", "file": "src/orders/orders.controller.ts", "pattern": "catch (e) {}", "categories": ["Code Quality", "API & Backend"]},
+    {"key": "error-with-200", "file": "src/orders/orders.controller.ts", "pattern": "return { error:", "categories": ["API & Backend"]},
+    {"key": "users-orders-circular-dependency", "file": "src/users/users.service.ts", "pattern": "OrdersService", "alt_files": ["src/orders/orders.service.ts", "src/users/users.module.ts", "src/orders/orders.module.ts"], "window": 60, "categories": ["Architecture"]},
+    {"key": "money-as-float", "file": "src/users/user.entity.ts", "pattern": "@Column('float'", "alt_files": ["src/orders/order.entity.ts"], "window": 2, "categories": ["Database"]},
+    {"key": "email-not-unique", "file": "src/users/user.entity.ts", "pattern": "email: string", "window": 2, "categories": ["Database"]},
+    {"key": "orders-untested", "file": "src/orders/orders.service.ts", "pattern": "", "window": 100, "alt_files": ["src/auth/auth.service.ts", "test/app.e2e-spec.ts", "src/users/users.service.spec.ts"], "categories": ["Testing"]},
+    {"key": "dockerfile-latest-root-secret", "file": "Dockerfile", "pattern": "", "window": 20, "categories": ["DevOps & Infrastructure"]},
+    {"key": "committed-env", "file": ".env", "pattern": "", "window": 5, "categories": ["Security", "DevOps & Infrastructure"]},
+    {"key": "ci-unpinned-no-tests", "file": ".github/workflows/ci.yml", "pattern": "", "window": 20, "categories": ["DevOps & Infrastructure"]}
+  ]
+}

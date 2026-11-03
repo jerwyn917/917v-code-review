@@ -1,0 +1,10 @@
+{
+  "fixture": "nestjs-orders-api (diff)",
+  "secrets": ["Pr0d-Orders-DB-2024!", "orders-jwt-signing-key-9f8e7d6c"],
+  "seeded": [
+    {"key": "command-injection-export", "file": "src/users/export.util.ts", "pattern": "execSync(", "window": 2, "categories": ["Security"]},
+    {"key": "path-traversal-export", "file": "src/users/export.util.ts", "pattern": "const target", "alt_files": ["src/users/users.controller.ts"], "window": 4, "categories": ["Security"]},
+    {"key": "unguarded-delete", "file": "src/users/users.controller.ts", "pattern": "@Delete(':id')", "window": 4, "categories": ["Security", "API & Backend"]},
+    {"key": "remove-method-missing", "file": "src/users/users.controller.ts", "pattern": "this.users.remove(", "window": 2, "categories": ["Architecture", "Code Quality", "API & Backend", "Testing"]}
+  ]
+}

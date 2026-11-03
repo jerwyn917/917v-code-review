@@ -1,0 +1,24 @@
+{
+  "name": "917v-code-review",
+  "version": "1.0.0",
+  "description": "917Ventures standardized, read-only code review for any repository. Detects the stack, runs specialized reviewer agents (architecture, security, performance, backend, frontend, database, testing, devops), validates every finding against the source, and writes consolidated reports to docs/code-review/. Commands: review, review-diff, security, architecture.",
+  "author": {
+    "name": "917 Ventures",
+    "email": "engineering@917ventures.com"
+  },
+  "homepage": "https://github.com/917ventures/917v-code-review",
+  "repository": "https://github.com/917ventures/917v-code-review",
+  "license": "UNLICENSED",
+  "keywords": [
+    "code-review",
+    "security",
+    "owasp",
+    "architecture",
+    "performance",
+    "testing",
+    "devops",
+    "static-analysis",
+    "git-diff",
+    "917ventures"
+  ]
+}

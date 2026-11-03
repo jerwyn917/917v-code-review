@@ -1,0 +1,19 @@
+{
+  "name": "917ventures",
+  "owner": {
+    "name": "917 Ventures",
+    "email": "engineering@917ventures.com"
+  },
+  "metadata": {
+    "description": "917Ventures internal Claude Code plugins."
+  },
+  "plugins": [
+    {
+      "name": "917v-code-review",
+      "source": "./",
+      "description": "Standardized read-only code review: stack detection, specialized reviewer agents, validated findings, consolidated reports in docs/code-review/.",
+      "category": "development",
+      "tags": ["code-review", "security", "quality"]
+    }
+  ]
+}
