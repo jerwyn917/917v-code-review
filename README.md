@@ -6,7 +6,8 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 - **Automatic stack detection** from manifests *and* source usage. A folder name alone never counts as evidence.
 - **Eight specialist agents**: architecture, security, performance, backend, frontend, database, testing, devops. They are selected by the detected stack and have non-overlapping responsibilities.
 - **Validation of every finding against the source**. The file must exist, the line must exist, and the evidence must appear in the file. Wrong line numbers are corrected, unverifiable claims are rejected, duplicates are merged, and secrets are redacted.
-- **Consolidated reports** in `docs/code-review/`: executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard, and `findings.json`.
+- **Consolidated reports** in `docs/code-review/`: executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, and `findings.json`.
+- **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, and "Explain ↗" buttons that send follow-up questions back to Claude.
 - **Read-only by default.** Every file is hashed before and after the review, and the report states whether anything outside `docs/code-review/` changed.
 
 ## Commands
@@ -103,12 +104,31 @@ docs/code-review/
 ├── security-review.md       OWASP Top 10 table, security findings, areas checked
 ├── architecture-review.md   structure, dependency analysis (import cycles), architecture + code quality findings
 ├── recommendations.md       strategic themes, then Priority 1/2/3 actions
-├── dashboard.html           self-contained interactive dashboard (no network requests)
+├── dashboard.html           interactive dashboard: amCharts 5 analytics, cross-filtering findings list
 ├── findings.json            validated findings, for tooling/CI
-└── .work/                   scratch: stack, signals, raw agent output, integrity proof (git-ignored)
+└── .work/                   scratch: stack, signals, raw agent output, integrity proof, chat-widget.html (git-ignored)
 ```
 
 `docs/code-review/` is the only place the plugin writes. Commit it, or add it to `.gitignore`; the plugin never decides for you. Each run replaces the previous reports.
+
+### Dashboard analytics
+
+`dashboard.html` uses the 917 Ventures design system (Unbounded and Montserrat, brand palette, light and dark themes) and draws its charts with [amCharts 5](https://www.amcharts.com) 5.21.5:
+
+| Chart | Shows | Click to |
+|---|---|---|
+| Health gauge | Heuristic 0–100 score with rating bands | — |
+| Severity donut | Findings per severity | filter by severity |
+| Category bars | Findings per category, stacked by severity | filter by category and severity |
+| OWASP Top 10 | Findings per OWASP 2021 risk | filter by OWASP risk |
+| Hotspot files | The 10 files with the most findings, stacked by severity | filter by file |
+| Reviewer × severity heatmap | What each specialist agent reported | filter by reviewer and severity |
+
+The page loads amCharts from cdnjs and the fonts from Google Fonts. The review data is inlined and never leaves the page. Offline, every chart falls back to built-in HTML bars, so the dashboard still works. amCharts' free build shows a small amCharts logo in each chart; internal use is fine, while customer-facing or logged-in production use needs a license.
+
+### In-chat results widget
+
+`render-reports.py --widget <path>` writes `.work/chat-widget.html`, an HTML fragment that follows the inline-widget rules of the 917 Ventures generative-UI skill: fragment only, host theme tokens, no comments, amCharts with an HTML fallback, and `sendPrompt` buttons. The orchestrator passes it unchanged to the host's inline visual tool. In the terminal there is no such tool, and the text summary is shown instead.
 
 An example report generated from the bundled NestJS fixture is in [`examples/nestjs-orders-api/`](examples/nestjs-orders-api/).
 
@@ -164,7 +184,7 @@ commands/                         the four slash commands (thin wrappers around 
 skills/comprehensive-review/      orchestration skill + references (schema, rubric, ownership, checklists)
 agents/                           the eight specialist reviewers (Read/Grep/Glob only)
 scripts/                          deterministic helpers (stdlib Python)
-templates/                        report templates + dashboard
+templates/                        report templates, dashboard, in-chat widget, 917V logo
 skill-src/SKILL.md                orchestrator for the standalone skill build
 tools/build-skill.py              packages the standalone skill into dist/ (git-ignored)
 tests/                            unit tests, fixtures, expected seeded issues, e2e runner, evaluator

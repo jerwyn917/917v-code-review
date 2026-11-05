@@ -1,0 +1,181 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&display=swap">
+<style>
+.v917cr { font-size: 14px; color: var(--text-primary); }
+.v917cr .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.v917cr .display { font-family: Unbounded, "Arial Black", Arial, sans-serif; font-weight: 600; }
+.v917cr .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 0 0 1.25rem; }
+.v917cr .kpi { background: var(--surface-1); border-radius: var(--radius); padding: 1rem; min-width: 0; }
+.v917cr .lbl { font-size: 13px; color: var(--text-secondary); }
+.v917cr .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 0 0 1rem; }
+.v917cr .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 0; }
+.v917cr .sq { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.v917cr .seg button { padding: 6px 12px; font-size: 13px; }
+.v917cr .seg button[aria-pressed="true"] { background: var(--bg-accent); color: var(--text-accent); border-color: var(--border-accent); }
+.v917cr .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 0.5px solid var(--border); }
+.v917cr .mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.v917cr .hb { display: grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 28px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+.v917cr .hb b { display: block; height: 10px; border-radius: 0 4px 4px 0; }
+</style>
+<div class="v917cr">
+<h2 class="sr-only">{{widget_summary}}</h2>
+<div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 1rem;">
+  <span class="display" style="font-size:13px; color:#407DC3; letter-spacing:0.02em;">917 Ventures</span>
+  <span style="font-size:13px; color:var(--text-secondary);">{{widget_meta}}</span>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Findings</div><div class="display" style="font-size:24px; margin-top:4px;" id="v917cr-k-total">—</div><div class="lbl" style="margin-top:4px;" id="v917cr-k-total-d"></div></div>
+  <div class="kpi"><div class="lbl">Code health</div><div class="display" style="font-size:24px; margin-top:4px;" id="v917cr-k-health">—</div><div style="font-size:13px; margin-top:4px;" id="v917cr-k-health-d"></div></div>
+  <div class="kpi"><div class="lbl">Critical + High</div><div class="display" style="font-size:24px; margin-top:4px;" id="v917cr-k-crit">—</div><div class="lbl" style="margin-top:4px;" id="v917cr-k-crit-d"></div></div>
+  <div class="kpi"><div class="lbl">Files affected</div><div class="display" style="font-size:24px; margin-top:4px;" id="v917cr-k-files">—</div><div class="lbl" style="margin-top:4px;" id="v917cr-k-files-d"></div></div>
+</div>
+<div class="charts">
+  <div style="min-width:0;">
+    <div id="v917cr-sev" style="width:100%; height:220px;" role="img" aria-label="Donut chart of findings by severity"></div>
+    <div class="legend" id="v917cr-sev-lg"></div>
+  </div>
+  <div style="min-width:0;">
+    <div id="v917cr-cat" style="width:100%; height:240px;" role="img" aria-label="Bar chart of findings by category"></div>
+  </div>
+</div>
+<div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin:0 0 4px;">
+  <div class="seg" style="display:flex; flex-wrap:wrap; gap:6px;" role="group" aria-label="Filter by severity" id="v917cr-seg"></div>
+  <button type="button" id="v917cr-cat-chip" style="display:none; font-size:12px; padding:4px 10px;"></button>
+</div>
+<div id="v917cr-list"></div>
+<div style="display:flex; flex-wrap:wrap; gap:8px; margin:1rem 0 0;">
+  <button type="button" id="v917cr-more">Show all</button>
+  <button type="button" id="v917cr-plan">Plan fixes for Critical and High ↗</button>
+  <button type="button" id="v917cr-dash">Open the full dashboard ↗</button>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/xy.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/percent.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/themes/Responsive.js"></script>
+<script>
+(function () {
+  const DATA = {{widget_json}};
+  const STATE = { sev: "", cat: "", all: false };
+  const SEV = ["Critical", "High", "Medium", "Low", "Informational"];
+  const SEV_COLOR = { Critical: "#D92D20", High: "#DB6E4F", Medium: "#B45309", Low: "#407DC3", Informational: "#8EA1BD" };
+  const html = document.documentElement;
+  const isDark = html.dataset.mode ? html.dataset.mode === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const ink = { text: isDark ? "#c3c2b7" : "#52514e", grid: isDark ? "#2c2c2a" : "#e1e0d9", surface: isDark ? "#1a1a19" : "#fcfcfb", strong: isDark ? "#f0efec" : "#0b0b0b" };
+  const $ = id => document.getElementById(id);
+  const fmt = n => Math.round(n).toLocaleString("en-US");
+  const ask = text => { if (typeof sendPrompt === "function") sendPrompt(text); };
+  const rows = DATA.findings.map(r => ({ id: r[0], sev: r[1], cat: r[2], title: r[3], file: r[4], line: r[5], status: r[6] }));
+  const LIMIT = 6;
+
+  const crit = DATA.sev.Critical + DATA.sev.High;
+  $("v917cr-k-total").textContent = fmt(DATA.total);
+  $("v917cr-k-total-d").textContent = DATA.status.Confirmed + " confirmed · " + DATA.status.Potential + " potential";
+  $("v917cr-k-health").textContent = DATA.health.score + "/100";
+  const hd = $("v917cr-k-health-d");
+  hd.textContent = DATA.health.rating;
+  hd.style.color = DATA.health.rating === "Healthy" ? "var(--text-success)" : DATA.health.rating === "At Risk" ? "var(--text-danger)" : "var(--text-warning)";
+  $("v917cr-k-crit").textContent = fmt(crit);
+  if (crit) $("v917cr-k-crit").style.color = "var(--text-danger)";
+  $("v917cr-k-crit-d").textContent = DATA.sev.Critical + " critical · " + DATA.sev.High + " high";
+  $("v917cr-k-files").textContent = fmt(DATA.files);
+  $("v917cr-k-files-d").textContent = DATA.files_considered ? "of " + fmt(DATA.files_considered) + " files" : "distinct files";
+
+  $("v917cr-sev-lg").innerHTML = SEV.filter(s => DATA.sev[s]).map(s => '<span><i class="sq" style="background:' + SEV_COLOR[s] + '"></i>' + s + " " + DATA.sev[s] + "</span>").join("");
+
+  const seg = $("v917cr-seg");
+  ["", ...SEV.filter(s => DATA.sev[s])].forEach(s => {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.sev = s; b.textContent = s ? s + " " + DATA.sev[s] : "All " + DATA.total;
+    b.addEventListener("click", () => { STATE.sev = s; STATE.all = false; renderList(); });
+    seg.appendChild(b);
+  });
+  $("v917cr-cat-chip").addEventListener("click", () => { STATE.cat = ""; renderList(); });
+
+  function renderList() {
+    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.sev === STATE.sev)));
+    const chip = $("v917cr-cat-chip");
+    chip.style.display = STATE.cat ? "inline-block" : "none";
+    chip.textContent = STATE.cat ? STATE.cat + " ×" : "";
+    chip.setAttribute("aria-label", "Remove category filter " + STATE.cat);
+    const shown = rows.filter(r => (!STATE.sev || r.sev === STATE.sev) && (!STATE.cat || r.cat === STATE.cat));
+    const list = $("v917cr-list");
+    list.innerHTML = "";
+    if (!shown.length) { list.innerHTML = '<div style="padding:10px 0; color:var(--text-secondary); border-top:0.5px solid var(--border);">No findings for this filter.</div>'; }
+    shown.slice(0, STATE.all ? shown.length : LIMIT).forEach(r => {
+      const row = document.createElement("div");
+      row.className = "row";
+      const left = document.createElement("div");
+      left.style.minWidth = "0";
+      const top = document.createElement("div");
+      top.style.cssText = "display:flex; flex-wrap:wrap; align-items:center; gap:8px;";
+      const sev = document.createElement("span");
+      sev.style.cssText = "font-size:12px; color:var(--text-secondary); white-space:nowrap;";
+      sev.innerHTML = '<i class="sq" style="background:' + SEV_COLOR[r.sev] + '"></i>';
+      sev.appendChild(document.createTextNode(r.sev));
+      const id = document.createElement("span"); id.className = "mono"; id.textContent = r.id;
+      const title = document.createElement("span"); title.style.fontWeight = "500"; title.textContent = r.title;
+      top.append(sev, id, title);
+      const loc = document.createElement("div"); loc.className = "mono"; loc.style.marginTop = "2px";
+      loc.textContent = r.file + ":" + r.line + " · " + r.cat + (r.status === "Potential" ? " · potential" : "");
+      left.append(top, loc);
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = "Explain ↗"; b.style.cssText = "font-size:12px; padding:4px 10px; white-space:nowrap;";
+      b.setAttribute("aria-label", "Explain " + r.id);
+      b.addEventListener("click", () => ask("Explain finding " + r.id + " (" + r.title + ") at " + r.file + ":" + r.line + " from the code review of " + DATA.repo + ", and show the recommended fix without changing any files"));
+      row.append(left, b);
+      list.appendChild(row);
+    });
+    const more = $("v917cr-more");
+    more.style.display = shown.length > LIMIT ? "inline-block" : "none";
+    more.textContent = STATE.all ? "Show top " + LIMIT : "Show all " + shown.length;
+  }
+  $("v917cr-more").addEventListener("click", () => { STATE.all = !STATE.all; renderList(); });
+  $("v917cr-plan").addEventListener("click", () => ask("Make a prioritized fix plan for the " + crit + " Critical and High findings from the code review of " + DATA.repo + ", grouped by root cause, without changing any files yet"));
+  $("v917cr-dash").addEventListener("click", () => ask("Open the full code review dashboard for " + DATA.repo + " (docs/code-review/dashboard.html)"));
+
+  function fallback() {
+    $("v917cr-sev").style.height = "0"; $("v917cr-cat").style.height = "auto";
+    const cats = DATA.cats;
+    const max = Math.max(1, ...cats.map(c => c[1]));
+    $("v917cr-cat").innerHTML = cats.map(c => '<div class="hb"><span style="color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + c[0].replace(/&/g, "&amp;") + '</span><b style="width:' + Math.round(c[1] / max * 100) + '%; background:#407DC3;"></b><span style="text-align:right;">' + c[1] + "</span></div>").join("");
+  }
+
+  function charts() {
+    const col = h => am5.color(h);
+    const r1 = am5.Root.new("v917cr-sev");
+    r1.setThemes([am5themes_Responsive.new(r1)]);
+    const pie = r1.container.children.push(am5percent.PieChart.new(r1, { innerRadius: am5.percent(62), paddingBottom: 20 }));
+    const ps = pie.series.push(am5percent.PieSeries.new(r1, { valueField: "value", categoryField: "sev", alignLabels: false }));
+    const pdata = SEV.filter(s => DATA.sev[s]).map(s => ({ sev: s, value: DATA.sev[s] }));
+    ps.get("colors").set("colors", pdata.map(d => col(SEV_COLOR[d.sev])));
+    ps.labels.template.set("forceHidden", true);
+    ps.ticks.template.set("forceHidden", true);
+    ps.slices.template.setAll({ stroke: col(ink.surface), strokeWidth: 2, tooltipText: "{category}: {value}", cursorOverStyle: "pointer" });
+    ps.slices.template.events.on("click", ev => { STATE.sev = ev.target.dataItem.get("category"); STATE.all = false; renderList(); });
+    ps.data.setAll(pdata);
+    pie.seriesContainer.children.push(am5.Label.new(r1, { text: fmt(DATA.total), centerX: am5.percent(50), centerY: am5.percent(50), fontFamily: "Unbounded, Arial, sans-serif", fontSize: 22, fontWeight: "600", fill: col(ink.strong) }));
+
+    const r2 = am5.Root.new("v917cr-cat");
+    r2.setThemes([am5themes_Responsive.new(r2)]);
+    const chart = r2.container.children.push(am5xy.XYChart.new(r2, { panX: false, panY: false, wheelX: "none", wheelY: "none", paddingLeft: 0, paddingRight: 8, paddingBottom: 20 }));
+    const yr = am5xy.AxisRendererY.new(r2, { inversed: true, minGridDistance: 10, cellStartLocation: 0.15, cellEndLocation: 0.85 });
+    yr.labels.template.setAll({ fill: col(ink.text), fontSize: 12, maxWidth: 120, oversizedBehavior: "truncate", ellipsis: "…" });
+    yr.grid.template.set("visible", false);
+    const y = chart.yAxes.push(am5xy.CategoryAxis.new(r2, { categoryField: "cat", renderer: yr }));
+    const xr = am5xy.AxisRendererX.new(r2, { minGridDistance: 40 });
+    xr.labels.template.setAll({ fill: col(ink.text), fontSize: 12 });
+    xr.grid.template.setAll({ stroke: col(ink.grid), strokeOpacity: 1 });
+    const x = chart.xAxes.push(am5xy.ValueAxis.new(r2, { min: 0, maxPrecision: 0, renderer: xr }));
+    const cdata = DATA.cats.map(c => ({ cat: c[0], value: c[1] }));
+    const cs = chart.series.push(am5xy.ColumnSeries.new(r2, { xAxis: x, yAxis: y, valueXField: "value", categoryYField: "cat", fill: col("#407DC3"), stroke: col("#407DC3") }));
+    cs.columns.template.setAll({ height: am5.percent(70), maxHeight: 18, cornerRadiusTR: 4, cornerRadiusBR: 4, tooltipText: "{categoryY}: {valueX}", cursorOverStyle: "pointer" });
+    cs.columns.template.events.on("click", ev => { STATE.cat = ev.target.dataItem.get("categoryY"); STATE.all = false; renderList(); });
+    y.data.setAll(cdata);
+    cs.data.setAll(cdata);
+  }
+
+  renderList();
+  if (typeof am5 === "undefined" || typeof am5xy === "undefined" || typeof am5percent === "undefined") { fallback(); return; }
+  try { charts(); } catch (e) { fallback(); }
+})();
+</script>

@@ -4,190 +4,439 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Code Review Dashboard</title>
-<!-- Self-contained: no external scripts, fonts or network requests. -->
+<!--
+  917 Ventures branded dashboard. Charts: amCharts 5.21.5 from cdnjs. Fonts: Unbounded + Montserrat from Google Fonts.
+  The review data is inlined below and never leaves the page. Offline, the charts fall back to built-in HTML bars.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
 :root {
-  --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #e4e3df;
-  --accent: #2f5bd3;
-  --critical: #b3261e; --high: #d9622b; --medium: #c99a06; --low: #3d7ea6; --info: #7a7a74;
-  --code-bg: #f1f0ec;
+  --bg:#FAFBFF; --card:#FFFFFF; --fg:#040815; --fg-2:#323643; --muted:#606471; --border:#D0D5DD;
+  --accent:#407DC3; --accent-text:#3A6DBA; --accent-soft:#EEF4FF; --navy:#142741; --focus:#50A6D8;
+  --success:#1E7A3C; --success-bg:#E8F8EE; --warning:#B45309; --warning-bg:#FFF4E0; --error:#D92D20; --error-bg:#FFF5F4;
+  --font-display:"Unbounded","Arial Black",Arial,sans-serif; --font-body:"Montserrat","Segoe UI",Roboto,Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --radius:15px; --radius-sm:8px; --shadow:0 1px 2px rgba(0,0,0,.05); --code-bg:#F3F4F6;
+  --chart-1:#407DC3; --chart-2:#DB6E4F; --chart-3:#3A6DBA; --chart-4:#52BCD5; --chart-5:#DA4E8F; --chart-6:#8EA1BD; --chart-7:#142741; --chart-8:#B45309;
+  --chart-grid:#D0D5DD; --chart-text:#606471; --tooltip-bg:#142741; --tooltip-fg:#FFFFFF; --heat-0:#E3EDFF;
+  --sev-critical:#D92D20; --sev-high:#DB6E4F; --sev-medium:#B45309; --sev-low:#407DC3; --sev-info:#8EA1BD; --sev-on:#FFFFFF;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141413; --panel: #1e1e1c; --text: #ecebe6; --muted: #a09f99; --line: #33332f;
-    --accent: #7d9bf0;
-    --critical: #f2766d; --high: #f0995f; --medium: #e8c14d; --low: #7cb8dc; --info: #a6a59f;
-    --code-bg: #262624;
-  }
-}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0B1220; --card:#142741; --fg:#F5F7FB; --fg-2:#DDE3EE; --muted:#A4A6BA; --border:#2A3B57;
+  --accent:#65DDF5; --accent-text:#8CC8F5; --accent-soft:#1B2E4D; --success:#6FDB8F; --success-bg:#143D22; --warning:#F5B553; --warning-bg:#3D2A0A; --error:#FF8A80; --error-bg:#4A1A17;
+  --code-bg:#0F1B33; --chart-7:#A4A6BA; --chart-grid:#2A3B57; --chart-text:#A4A6BA; --tooltip-bg:#F5F7FB; --tooltip-fg:#040815; --heat-0:#1B2E4D;
+  --sev-critical:#F2555A; --sev-high:#F0997B; --sev-medium:#F5C451; --sev-low:#65DDF5; --sev-info:#A4A6BA; --sev-on:#040815; color-scheme:dark } }
 :root[data-theme="dark"] {
-  --bg: #141413; --panel: #1e1e1c; --text: #ecebe6; --muted: #a09f99; --line: #33332f;
-  --accent: #7d9bf0;
-  --critical: #f2766d; --high: #f0995f; --medium: #e8c14d; --low: #7cb8dc; --info: #a6a59f;
-  --code-bg: #262624;
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
-h1 { font-size: 24px; margin: 0 0 4px; }
-h2 { font-size: 16px; margin: 0 0 12px; }
-.meta { color: var(--muted); font-size: 13px; }
-.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin: 20px 0; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
-.big { font-size: 34px; font-weight: 650; line-height: 1.1; }
-.bar-row { display: grid; grid-template-columns: 150px 1fr 36px; align-items: center; gap: 8px; margin: 6px 0;
-  font-size: 13px; }
-.bar { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
-.bar > span { display: block; height: 100%; border-radius: 5px; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
-select, input[type=search] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--panel); color: var(--text); }
-input[type=search] { flex: 1 1 220px; }
-.sev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
-  color: #fff; white-space: nowrap; }
-.finding { border-top: 1px solid var(--line); padding: 10px 0; }
-.finding summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; list-style: none; }
-.finding summary::-webkit-details-marker { display: none; }
-.fid { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
-.loc { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted);
-  overflow-wrap: anywhere; }
-.tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
-.body { padding: 8px 0 4px 0; }
-.body h3 { font-size: 13px; margin: 12px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-pre { background: var(--code-bg); padding: 10px 12px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; }
-.empty { color: var(--muted); padding: 16px 0; }
-.theme { float: right; }
-@media (max-width: 560px) { .bar-row { grid-template-columns: 110px 1fr 30px; } .big { font-size: 28px; } }
+  --bg:#0B1220; --card:#142741; --fg:#F5F7FB; --fg-2:#DDE3EE; --muted:#A4A6BA; --border:#2A3B57;
+  --accent:#65DDF5; --accent-text:#8CC8F5; --accent-soft:#1B2E4D; --success:#6FDB8F; --success-bg:#143D22; --warning:#F5B553; --warning-bg:#3D2A0A; --error:#FF8A80; --error-bg:#4A1A17;
+  --code-bg:#0F1B33; --chart-7:#A4A6BA; --chart-grid:#2A3B57; --chart-text:#A4A6BA; --tooltip-bg:#F5F7FB; --tooltip-fg:#040815; --heat-0:#1B2E4D;
+  --sev-critical:#F2555A; --sev-high:#F0997B; --sev-medium:#F5C451; --sev-low:#65DDF5; --sev-info:#A4A6BA; --sev-on:#040815; color-scheme:dark }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 var(--font-body); }
+.wrap { max-width:1200px; margin:0 auto; padding:0 max(16px, env(safe-area-inset-right, 0px)) 40px max(16px, env(safe-area-inset-left, 0px)); }
+header.bar { position:sticky; top:0; z-index:5; background:var(--card); box-shadow:0 4px 6px -1px rgba(0,0,0,.1); margin-bottom:24px; }
+header.bar .in { max-width:1200px; margin:0 auto; padding:12px max(16px, env(safe-area-inset-left, 0px)); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+header.bar .logo { width:150px; height:auto; background:#fff; border-radius:8px; padding:4px 8px; display:block; }
+header.bar h1 { font-family:var(--font-display); font-size:18px; font-weight:600; margin:0; overflow-wrap:anywhere; }
+header.bar .meta { color:var(--muted); font-size:12px; }
+header.bar .grow { flex:1 1 260px; min-width:0; }
+h2 { font-size:16px; font-weight:700; margin:0; }
+.sub { font-size:12px; color:var(--muted); }
+.kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:16px; margin-bottom:24px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; min-width:0; }
+.kpi .label { font-size:12px; font-weight:600; color:var(--muted); }
+.kpi .value { font-family:var(--font-display); font-size:30px; font-weight:700; line-height:1.2; margin:6px 0 4px; font-variant-numeric:tabular-nums; }
+.kpi .note { font-size:12px; color:var(--fg-2); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap:24px; margin-bottom:24px; }
+.grid .wide { grid-column:1 / -1; }
+.card-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.chart { width:100%; height:300px; }
+.chart.tall { height:360px; }
+@media (max-width:640px) { .chart { height:260px; } .chart.tall { height:320px; } header.bar { position:static; } header.bar .logo { width:120px; } }
+.fallback .row { display:grid; grid-template-columns:minmax(0, 160px) minmax(0, 1fr) 36px; gap:8px; align-items:center; margin:6px 0; font-size:13px; }
+.fallback .row > span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fallback .track { height:10px; border-radius:5px; background:var(--accent-soft); overflow:hidden; display:flex; }
+.fallback .track i { display:block; height:100%; }
+.num { text-align:right; font-variant-numeric:tabular-nums; }
+.badge { display:inline-flex; align-items:center; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:600; white-space:nowrap; }
+.badge.ok { background:var(--success-bg); color:var(--success); } .badge.warn { background:var(--warning-bg); color:var(--warning); } .badge.bad { background:var(--error-bg); color:var(--error); }
+.sev { display:inline-block; padding:1px 10px; border-radius:999px; font-size:12px; font-weight:600; color:var(--sev-on); white-space:nowrap; }
+.legend { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--fg-2); margin-top:8px; }
+.legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+.controls { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; align-items:center; }
+select, input[type=search], button { font:inherit; font-size:13px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--card); color:var(--fg); }
+input[type=search] { flex:1 1 240px; min-width:0; }
+button { cursor:pointer; font-weight:600; }
+button:hover { border-color:var(--accent); }
+:focus-visible { outline:2.5px solid var(--focus); outline-offset:2px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; }
+.chip { background:var(--accent-soft); color:var(--accent-text); border:1px solid transparent; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:600; }
+.finding { border-top:1px solid var(--border); padding:10px 0; }
+.finding summary { cursor:pointer; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; list-style:none; }
+.finding summary::-webkit-details-marker { display:none; }
+.fid, .loc { font-family:var(--font-mono); font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+.tag { font-size:12px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:0 8px; }
+.body h3 { font-size:12px; margin:12px 0 4px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+pre { background:var(--code-bg); padding:10px 12px; border-radius:var(--radius-sm); overflow-x:auto; font:12.5px/1.5 var(--font-mono); }
+.empty { color:var(--muted); padding:16px 0; }
+footer { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+@media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
-<main>
-  <button class="theme" id="theme" type="button" style="font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer">Theme</button>
-  <h1 id="title">Code Review</h1>
-  <div class="meta" id="meta"></div>
-  <div class="grid">
-    <div class="card"><h2>Total findings</h2><div class="big" id="total"></div><div class="meta" id="status"></div></div>
-    <div class="card"><h2>Code health</h2><div class="big" id="health"></div><div class="meta" id="health-sub"></div></div>
-    <div class="card"><h2>By severity</h2><div id="sev-bars"></div></div>
-    <div class="card"><h2>By category</h2><div id="cat-bars"></div></div>
-  </div>
-  <div class="card">
-    <h2>Findings</h2>
+<header class="bar"><div class="in">
+  <img class="logo" alt="917Ventures" width="150" height="29" src="{{logo_data_uri}}">
+  <div class="grow"><h1 id="title">Code review</h1><div class="meta" id="meta"></div></div>
+  <button id="theme" type="button" aria-label="Switch light or dark theme">Theme</button>
+</div></header>
+<main class="wrap">
+  <section class="kpis" aria-label="Key metrics">
+    <div class="card kpi"><div class="label">Total findings</div><div class="value" id="k-total">—</div><div class="note" id="k-total-n"></div></div>
+    <div class="card kpi"><div class="label">Code health</div><div class="value" id="k-health">—</div><div class="note" id="k-health-n"></div></div>
+    <div class="card kpi"><div class="label">Critical + High</div><div class="value" id="k-crit">—</div><div class="note" id="k-crit-n"></div></div>
+    <div class="card kpi"><div class="label">Files with findings</div><div class="value" id="k-files">—</div><div class="note" id="k-files-n"></div></div>
+  </section>
+
+  <section class="grid" aria-label="Analytics">
+    <div class="card">
+      <div class="card-head"><div><h2>Code health score</h2><div class="sub">0–100, heuristic, this review's findings only</div></div></div>
+      <div id="ch-health" class="chart" role="img" aria-label="Gauge of the code health score"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Findings by severity</h2><div class="sub">click a slice to filter the list</div></div></div>
+      <div id="ch-sev" class="chart" role="img" aria-label="Donut chart of findings by severity"></div>
+      <div class="legend" id="lg-sev"></div>
+    </div>
+    <div class="card wide">
+      <div class="card-head"><div><h2>Findings by category</h2><div class="sub">stacked by severity · click a segment to filter</div></div></div>
+      <div id="ch-cat" class="chart" role="img" aria-label="Stacked bar chart of findings per category and severity"></div>
+      <div class="legend" id="lg-cat"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>OWASP Top 10 (2021)</h2><div class="sub">findings mapped to each risk</div></div></div>
+      <div id="ch-owasp" class="chart" role="img" aria-label="Column chart of findings per OWASP Top 10 category"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Hotspot files</h2><div class="sub">top 10 files by findings · stacked by severity</div></div></div>
+      <div id="ch-files" class="chart tall" role="img" aria-label="Bar chart of the files with the most findings"></div>
+    </div>
+    <div class="card wide">
+      <div class="card-head"><div><h2>Reviewer × severity</h2><div class="sub">findings each specialist agent reported · click a cell to filter</div></div></div>
+      <div id="ch-agents" class="chart" role="img" aria-label="Heatmap of findings per reviewer and severity"></div>
+      <div class="legend" id="lg-agents"></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:24px" aria-label="Findings">
+    <div class="card-head"><h2>Findings</h2><span class="sub" id="shown"></span></div>
     <div class="controls">
-      <input type="search" id="q" placeholder="Search title, file, description…" aria-label="Search findings">
+      <input type="search" id="q" placeholder="Search ID, title, file, description…" aria-label="Search findings">
       <select id="f-sev" aria-label="Filter by severity"><option value="">All severities</option></select>
       <select id="f-cat" aria-label="Filter by category"><option value="">All categories</option></select>
-      <select id="f-status" aria-label="Filter by status"><option value="">Confirmed + Potential</option>
-        <option>Confirmed</option><option>Potential</option></select>
+      <select id="f-status" aria-label="Filter by status"><option value="">Confirmed + Potential</option><option>Confirmed</option><option>Potential</option></select>
+      <button type="button" id="clear">Clear filters</button>
     </div>
+    <div class="chips" id="chips"></div>
     <div id="list"></div>
-  </div>
+  </section>
+
+  <footer><span id="foot"></span><span>Charts: amCharts 5 · 917 Ventures design system</span></footer>
 </main>
 <script id="review-data" type="application/json">{{data_json}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/xy.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/percent.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/radar.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/themes/Animated.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/themes/Responsive.js"></script>
 <script>
 (function () {
   var data = JSON.parse(document.getElementById("review-data").textContent);
+  var findings = data.findings || [];
   var SEV = ["Critical", "High", "Medium", "Low", "Informational"];
-  var SEV_VAR = { Critical: "--critical", High: "--high", Medium: "--medium", Low: "--low", Informational: "--info" };
+  var SEV_KEY = { Critical: "critical", High: "high", Medium: "medium", Low: "low", Informational: "info" };
+  var OWASP = [["A01", "Broken Access Control"], ["A02", "Cryptographic Failures"], ["A03", "Injection"],
+    ["A04", "Insecure Design"], ["A05", "Security Misconfiguration"], ["A06", "Vulnerable Components"],
+    ["A07", "Auth Failures"], ["A08", "Integrity Failures"], ["A09", "Logging Failures"], ["A10", "SSRF"]];
+  var FILTER = { q: "", sev: "", cat: "", status: "", owasp: "", agent: "", file: "" };
+  var $ = function (id) { return document.getElementById(id); };
+  var css = function (v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); };
+  var sevColor = function (s) { return css("--sev-" + SEV_KEY[s]); };
+  var fmt = function (n) { return new Intl.NumberFormat("en-PH").format(Math.round(n)); };
+  var shortAgent = function (a) { return String(a).replace(/-reviewer$/, ""); };
   function el(tag, attrs, text) {
     var e = document.createElement(tag);
     for (var k in (attrs || {})) e.setAttribute(k, attrs[k]);
     if (text != null) e.textContent = text;
     return e;
   }
-  function sevBadge(s) {
-    var b = el("span", { "class": "sev" }, s);
-    b.style.background = "var(" + SEV_VAR[s] + ")";
-    return b;
-  }
-  function bars(target, counts, order, colorFor) {
-    var max = Math.max.apply(null, order.map(function (k) { return counts[k] || 0; }).concat([1]));
-    order.forEach(function (k) {
-      var row = el("div", { "class": "bar-row" });
-      row.appendChild(el("span", null, k));
-      var bar = el("div", { "class": "bar" }), fill = el("span");
-      fill.style.width = ((counts[k] || 0) / max * 100) + "%";
-      fill.style.background = colorFor(k);
-      bar.appendChild(fill); row.appendChild(bar);
-      row.appendChild(el("span", { "class": "num" }, String(counts[k] || 0)));
-      target.appendChild(row);
-    });
-  }
-  try {
-    var saved = localStorage.getItem("cr-theme");
-    if (saved) document.documentElement.setAttribute("data-theme", saved);
-  } catch (e) {}
-  document.getElementById("theme").onclick = function () {
-    var cur = document.documentElement.getAttribute("data-theme") ||
-      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  function count(list, key) { var c = {}; list.forEach(function (f) { var k = key(f); c[k] = (c[k] || 0) + 1; }); return c; }
+  function sevSplit(list) { var o = {}; SEV.forEach(function (s) { o[s] = 0; }); list.forEach(function (f) { o[f.severity]++; }); return o; }
+
+  var catRows = Object.keys(data.totals.by_category).filter(function (c) { return data.totals.by_category[c] > 0; })
+    .map(function (c) { var r = sevSplit(findings.filter(function (f) { return f.category === c; })); r.label = c; r.total = data.totals.by_category[c]; return r; })
+    .sort(function (a, b) { return b.total - a.total; });
+  var owaspRows = OWASP.map(function (o) {
+    return { code: o[0], name: o[1], value: findings.filter(function (f) { return String(f.owasp || "").toUpperCase().indexOf(o[0]) === 0; }).length };
+  });
+  var byFile = count(findings, function (f) { return f.file; });
+  var fileRows = Object.keys(byFile).sort(function (a, b) { return byFile[b] - byFile[a] || (a < b ? -1 : 1); }).slice(0, 10)
+    .map(function (file) { var r = sevSplit(findings.filter(function (f) { return f.file === file; })); r.label = file; r.total = byFile[file]; return r; });
+  var agents = []; findings.forEach(function (f) { (f.reported_by || []).forEach(function (a) { if (agents.indexOf(a) < 0) agents.push(a); }); });
+  agents.sort();
+  var heat = [];
+  agents.forEach(function (a) { SEV.forEach(function (s) {
+    heat.push({ agent: shortAgent(a), full: a, sev: s, value: findings.filter(function (f) { return f.severity === s && (f.reported_by || []).indexOf(a) >= 0; }).length });
+  }); });
+
+  try { var saved = localStorage.getItem("cr-theme"); if (saved) document.documentElement.setAttribute("data-theme", saved); } catch (e) {}
+  $("theme").onclick = function () {
+    var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     var next = cur === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem("cr-theme", next); } catch (e) {}
+    drawAll();
   };
 
-  document.getElementById("title").textContent = "Code Review — " + data.repository;
-  document.getElementById("meta").textContent = [data.review_type, data.scope_description, data.date,
-    data.commit ? "commit " + data.commit : ""].filter(Boolean).join(" · ");
-  document.getElementById("total").textContent = data.totals.findings;
-  document.getElementById("status").textContent = data.totals.by_status.Confirmed + " confirmed · " +
-    data.totals.by_status.Potential + " potential";
-  document.getElementById("health").textContent = data.health.score + "/100";
-  document.getElementById("health-sub").textContent = data.health.rating + " (heuristic, this review's findings only)";
-  bars(document.getElementById("sev-bars"), data.totals.by_severity, SEV,
-       function (k) { return "var(" + SEV_VAR[k] + ")"; });
-  var cats = Object.keys(data.totals.by_category).filter(function (c) { return data.totals.by_category[c] > 0; });
-  bars(document.getElementById("cat-bars"), data.totals.by_category, cats.length ? cats : Object.keys(data.totals.by_category),
-       function () { return "var(--accent)"; });
+  document.title = "Code Review — " + data.repository;
+  $("title").textContent = "Code review — " + data.repository;
+  $("meta").textContent = [data.review_type, data.scope_description, data.date, data.commit ? "commit " + data.commit : ""].filter(Boolean).join(" · ");
+  var t = data.totals, crit = t.by_severity.Critical + t.by_severity.High;
+  $("k-total").textContent = fmt(t.findings);
+  $("k-total-n").textContent = t.by_status.Confirmed + " confirmed · " + t.by_status.Potential + " potential";
+  $("k-health").textContent = data.health.score + "/100";
+  var rb = el("span", { "class": "badge " + ({ "At Risk": "bad", "Needs Attention": "warn", "Fair": "warn", "Healthy": "ok" }[data.health.rating] || "warn") }, data.health.rating);
+  $("k-health-n").appendChild(rb);
+  $("k-crit").textContent = fmt(crit);
+  $("k-crit").style.color = crit ? "var(--error)" : "var(--success)";
+  $("k-crit-n").textContent = t.by_severity.Critical + " critical · " + t.by_severity.High + " high";
+  $("k-files").textContent = fmt(Object.keys(byFile).length);
+  $("k-files-n").textContent = data.files_considered ? "of " + fmt(data.files_considered) + " repository files" : "distinct files cited";
+  var v = data.validation || {};
+  $("foot").textContent = "Generated by 917v-code-review · " + (v.submitted != null ? v.submitted + " submitted, " + v.accepted + " accepted, " + v.rejected + " rejected, " + v.duplicates_merged + " merged · " : "") + (data.date || "");
 
-  var fs = document.getElementById("f-sev"), fc = document.getElementById("f-cat");
+  function fallbackBars(id, rows, stacked, colorFor) {
+    var box = $(id); box.style.height = "auto"; box.innerHTML = ""; box.className = "fallback";
+    var max = Math.max.apply(null, rows.map(function (r) { return r.total; }).concat([1]));
+    rows.forEach(function (r) {
+      var row = el("div", { "class": "row" }); row.appendChild(el("span", { title: r.label }, r.label));
+      var tr = el("div", { "class": "track" });
+      (stacked ? SEV : ["total"]).forEach(function (s) {
+        var n = stacked ? r[s] : r.total; if (!n) return;
+        var i = el("i"); i.style.width = (n / max * 100) + "%"; i.style.background = stacked ? sevColor(s) : colorFor(r); tr.appendChild(i);
+      });
+      row.appendChild(tr); row.appendChild(el("span", { "class": "num" }, String(r.total))); box.appendChild(row);
+    });
+  }
+  function fallbackAll() {
+    var sevRows = SEV.map(function (s) { var r = {}; SEV.forEach(function (x) { r[x] = x === s ? t.by_severity[s] : 0; }); r.label = s; r.total = t.by_severity[s]; return r; });
+    $("ch-health").style.height = "auto";
+    $("ch-health").innerHTML = '<div class="kpi"><div class="value">' + data.health.score + '/100</div></div>';
+    fallbackBars("ch-sev", sevRows, true); fallbackBars("ch-cat", catRows, true); fallbackBars("ch-files", fileRows, true);
+    fallbackBars("ch-owasp", owaspRows.map(function (o) { return { label: o.code + " " + o.name, total: o.value }; }), false, function () { return css("--chart-1"); });
+    fallbackBars("ch-agents", agents.map(function (a) { var r = { label: shortAgent(a), total: 0 }; SEV.forEach(function (s) { r[s] = heat.filter(function (h) { return h.full === a && h.sev === s; })[0].value; r.total += r[s]; }); return r; }), true);
+  }
+
+  var roots = {};
+  function brandTheme(root) {
+    var th = am5.Theme.new(root);
+    th.rule("ColorSet").setAll({ colors: [1, 2, 3, 4, 5, 6, 7, 8].map(function (i) { return am5.color(css("--chart-" + i)); }), reuse: false });
+    th.rule("Label").setAll({ fontFamily: css("--font-body"), fontSize: 12, fill: am5.color(css("--chart-text")) });
+    th.rule("Grid").setAll({ stroke: am5.color(css("--chart-grid")), strokeOpacity: 0.6 });
+    th.rule("AxisRenderer").setAll({ stroke: am5.color(css("--chart-grid")) });
+    th.rule("AxisTick").setAll({ visible: false });
+    return th;
+  }
+  function makeRoot(id) {
+    if (roots[id]) roots[id].dispose();
+    var root = am5.Root.new(id);
+    var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    root.setThemes((reduced ? [] : [am5themes_Animated.new(root)]).concat([am5themes_Responsive.new(root), brandTheme(root)]));
+    root.numberFormatter.set("numberFormat", "#,###");
+    roots[id] = root;
+    return root;
+  }
+  function tip(root, text) {
+    var tp = am5.Tooltip.new(root, { getFillFromSprite: false, labelText: text });
+    tp.get("background").setAll({ fill: am5.color(css("--tooltip-bg")), stroke: am5.color(css("--tooltip-bg")), cornerRadius: 8 });
+    tp.label.setAll({ fill: am5.color(css("--tooltip-fg")), fontSize: 12 });
+    return tp;
+  }
+  function xy(root, opts) {
+    return root.container.children.push(am5xy.XYChart.new(root, Object.assign({ panX: false, panY: false, wheelX: "none", wheelY: "none", paddingLeft: 0, paddingRight: 8, paddingBottom: 24, layout: root.verticalLayout }, opts || {})));
+  }
+  function legend(id, items) {
+    $(id).innerHTML = "";
+    items.forEach(function (x) { var s = el("span"); var i = el("i"); i.style.background = x.color; s.appendChild(i); s.appendChild(document.createTextNode(x.label)); $(id).appendChild(s); });
+  }
+
+  function drawHealth() {
+    var root = makeRoot("ch-health"), score = data.health.score;
+    var chart = root.container.children.push(am5radar.RadarChart.new(root, { panX: false, panY: false, startAngle: 180, endAngle: 360, innerRadius: am5.percent(78), radius: am5.percent(95), paddingBottom: 24 }));
+    var ar = am5radar.AxisRendererCircular.new(root, { strokeOpacity: 0, minGridDistance: 40 });
+    ar.grid.template.set("visible", false);
+    ar.labels.template.setAll({ radius: 12, fontSize: 11 });
+    var axis = chart.xAxes.push(am5xy.ValueAxis.new(root, { min: 0, max: 100, strictMinMax: true, renderer: ar }));
+    [[0, 50, "--sev-critical"], [50, 70, "--sev-medium"], [70, 85, "--chart-4"], [85, 100, "--success"]].forEach(function (b) {
+      var r = axis.createAxisRange(axis.makeDataItem({ value: b[0], endValue: b[1] }));
+      r.get("axisFill").setAll({ visible: true, fill: am5.color(css(b[2])), fillOpacity: 0.18 });
+    });
+    var band = score < 50 || t.by_severity.Critical ? "--sev-critical" : score < 70 ? "--sev-medium" : score < 85 ? "--chart-4" : "--success";
+    var prog = axis.createAxisRange(axis.makeDataItem({ value: 0, endValue: Math.max(score, 0.5) }));
+    prog.get("axisFill").setAll({ visible: true, fill: am5.color(css(band)), fillOpacity: 1 });
+    chart.radarContainer.children.push(am5.Label.new(root, { text: score + "", centerX: am5.percent(50), centerY: am5.percent(95), fontFamily: css("--font-display"), fontSize: 40, fontWeight: "700", fill: am5.color(css("--fg")) }));
+    chart.radarContainer.children.push(am5.Label.new(root, { text: data.health.rating, centerX: am5.percent(50), centerY: am5.percent(0), y: 8, fontSize: 13, fontWeight: "600", fill: am5.color(css(band)) }));
+  }
+  function drawSeverity() {
+    var root = makeRoot("ch-sev");
+    var rows = SEV.map(function (s) { return { sev: s, value: t.by_severity[s] }; }).filter(function (r) { return r.value > 0; });
+    var chart = root.container.children.push(am5percent.PieChart.new(root, { innerRadius: am5.percent(62), paddingBottom: 24 }));
+    var s = chart.series.push(am5percent.PieSeries.new(root, { valueField: "value", categoryField: "sev", alignLabels: false, tooltip: tip(root, "{category}: {value} ({valuePercentTotal.formatNumber('#.0')}%)") }));
+    s.get("colors").set("colors", rows.map(function (r) { return am5.color(sevColor(r.sev)); }));
+    s.labels.template.set("forceHidden", true); s.ticks.template.set("forceHidden", true);
+    s.slices.template.setAll({ stroke: am5.color(css("--card")), strokeWidth: 2, cursorOverStyle: "pointer", focusable: true, ariaLabel: "{category}: {value}" });
+    s.slices.template.events.on("click", function (ev) { setFilter({ sev: ev.target.dataItem.get("category") }); });
+    s.data.setAll(rows);
+    chart.seriesContainer.children.push(am5.Label.new(root, { text: fmt(t.findings), centerX: am5.percent(50), centerY: am5.percent(50), fontFamily: css("--font-display"), fontSize: 26, fontWeight: "700", fill: am5.color(css("--fg")) }));
+    legend("lg-sev", SEV.map(function (x) { return { label: x + " " + t.by_severity[x], color: sevColor(x) }; }));
+  }
+  function stackedBars(id, rows, onClick, labelWidth) {
+    var root = makeRoot(id), chart = xy(root);
+    var yr = am5xy.AxisRendererY.new(root, { inversed: true, minGridDistance: 12, cellStartLocation: 0.15, cellEndLocation: 0.85 });
+    yr.grid.template.set("visible", false);
+    yr.labels.template.setAll({ maxWidth: labelWidth, oversizedBehavior: "truncate", ellipsis: "…", textAlign: "end", fontSize: 12 });
+    var y = chart.yAxes.push(am5xy.CategoryAxis.new(root, { categoryField: "label", renderer: yr, tooltip: tip(root, "{category}") }));
+    var x = chart.xAxes.push(am5xy.ValueAxis.new(root, { min: 0, maxPrecision: 0, renderer: am5xy.AxisRendererX.new(root, { minGridDistance: 40 }) }));
+    y.data.setAll(rows);
+    SEV.forEach(function (sv) {
+      if (!rows.some(function (r) { return r[sv]; })) return;
+      var s = chart.series.push(am5xy.ColumnSeries.new(root, { name: sv, stacked: true, xAxis: x, yAxis: y, valueXField: sv, categoryYField: "label", fill: am5.color(sevColor(sv)), stroke: am5.color(css("--card")), tooltip: tip(root, "{categoryY}\n{name}: {valueX}") }));
+      s.columns.template.setAll({ height: am5.percent(70), maxHeight: 22, strokeWidth: 2, cursorOverStyle: "pointer", focusable: true, ariaLabel: "{categoryY} {name}: {valueX}" });
+      s.columns.template.events.on("click", function (ev) { onClick(ev.target.dataItem.get("categoryY"), sv); });
+      s.data.setAll(rows);
+    });
+  }
+  function drawCategories() {
+    stackedBars("ch-cat", catRows, function (c, sv) { setFilter({ cat: c, sev: sv }); }, 170);
+    legend("lg-cat", SEV.filter(function (s) { return t.by_severity[s]; }).map(function (s) { return { label: s, color: sevColor(s) }; }));
+  }
+  function drawFiles() { stackedBars("ch-files", fileRows, function (f, sv) { setFilter({ file: f, sev: sv }); }, 190); }
+  function drawOwasp() {
+    var root = makeRoot("ch-owasp"), chart = xy(root);
+    var xr = am5xy.AxisRendererX.new(root, { minGridDistance: 20 });
+    xr.grid.template.set("visible", false);
+    var x = chart.xAxes.push(am5xy.CategoryAxis.new(root, { categoryField: "code", renderer: xr }));
+    var y = chart.yAxes.push(am5xy.ValueAxis.new(root, { min: 0, maxPrecision: 0, renderer: am5xy.AxisRendererY.new(root, {}) }));
+    var s = chart.series.push(am5xy.ColumnSeries.new(root, { name: "Findings", xAxis: x, yAxis: y, valueYField: "value", categoryXField: "code", fill: am5.color(css("--chart-1")), stroke: am5.color(css("--chart-1")), tooltip: tip(root, "{categoryX} {name}: {valueY}") }));
+    s.columns.template.setAll({ width: am5.percent(65), maxWidth: 28, cornerRadiusTL: 4, cornerRadiusTR: 4, strokeOpacity: 0, cursorOverStyle: "pointer", focusable: true, ariaLabel: "{categoryX}: {valueY}" });
+    s.columns.template.adapters.add("tooltipText", function (txt, target) { var d = target.dataItem && target.dataItem.dataContext; return d ? d.code + " " + d.name + ": " + d.value : txt; });
+    s.columns.template.events.on("click", function (ev) { var d = ev.target.dataItem.dataContext; if (d.value) setFilter({ owasp: d.code }); });
+    x.data.setAll(owaspRows); s.data.setAll(owaspRows);
+  }
+  function drawAgents() {
+    var root = makeRoot("ch-agents"), chart = xy(root);
+    var yr = am5xy.AxisRendererY.new(root, { inversed: true, minGridDistance: 12 });
+    yr.grid.template.set("visible", false);
+    var y = chart.yAxes.push(am5xy.CategoryAxis.new(root, { categoryField: "agent", renderer: yr }));
+    var xr = am5xy.AxisRendererX.new(root, { opposite: true, minGridDistance: 20 });
+    xr.grid.template.set("visible", false);
+    var x = chart.xAxes.push(am5xy.CategoryAxis.new(root, { categoryField: "sev", renderer: xr }));
+    var s = chart.series.push(am5xy.ColumnSeries.new(root, { xAxis: x, yAxis: y, categoryXField: "sev", categoryYField: "agent", valueField: "value", calculateAggregates: true, stroke: am5.color(css("--card")), tooltip: tip(root, "{categoryY} · {categoryX}: {value}") }));
+    s.columns.template.setAll({ width: am5.percent(100), height: am5.percent(100), strokeWidth: 3, cornerRadiusTL: 6, cornerRadiusTR: 6, cornerRadiusBL: 6, cornerRadiusBR: 6, cursorOverStyle: "pointer", focusable: true, ariaLabel: "{categoryY} {categoryX}: {value}" });
+    s.set("heatRules", [{ target: s.columns.template, min: am5.color(css("--heat-0")), max: am5.color(css("--chart-3")), dataField: "value", key: "fill" }]);
+    s.columns.template.events.on("click", function (ev) { var d = ev.target.dataItem.dataContext; if (d.value) setFilter({ agent: d.full, sev: d.sev }); });
+    var hmax = Math.max.apply(null, heat.map(function (h) { return h.value; }).concat([1]));
+    s.bullets.push(function (r, series, di) {
+      var val = di.dataContext.value;
+      return am5.Bullet.new(r, { locationX: 0.5, locationY: 0.5, sprite: am5.Label.new(r, { text: val ? String(val) : "", centerX: am5.percent(50), centerY: am5.percent(50), fontSize: 12, fontWeight: "600",
+        fill: am5.color(val >= hmax / 2 ? "#FFFFFF" : css("--fg")) }) });
+    });
+    y.data.setAll(agents.map(function (a) { return { agent: shortAgent(a) }; }));
+    x.data.setAll(SEV.map(function (s2) { return { sev: s2 }; }));
+    s.data.setAll(heat);
+    $("ch-agents").style.height = Math.max(220, agents.length * 40 + 70) + "px";
+    legend("lg-agents", [{ label: "Fewer", color: css("--heat-0") }, { label: "More findings", color: css("--chart-3") }]);
+  }
+  function drawAll() {
+    if (typeof am5 === "undefined" || typeof am5xy === "undefined" || typeof am5percent === "undefined" || typeof am5radar === "undefined") { fallbackAll(); return; }
+    try {
+      if (!findings.length) { fallbackAll(); return; }
+      drawHealth(); drawSeverity(); drawCategories(); drawOwasp(); drawFiles(); drawAgents();
+    } catch (err) {
+      Object.keys(roots).forEach(function (k) { try { roots[k].dispose(); } catch (e) {} });
+      roots = {}; fallbackAll();
+    }
+  }
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { if (!document.documentElement.getAttribute("data-theme")) drawAll(); }); } catch (e) {}
+
+  var fs = $("f-sev"), fc = $("f-cat"), fst = $("f-status");
   SEV.forEach(function (s) { fs.appendChild(el("option", null, s)); });
   Object.keys(data.totals.by_category).forEach(function (c) { fc.appendChild(el("option", null, c)); });
-
-  function render() {
-    var q = document.getElementById("q").value.toLowerCase();
-    var sv = fs.value, cv = fc.value, st = document.getElementById("f-status").value;
-    var list = document.getElementById("list");
+  function setFilter(patch) {
+    for (var k in patch) FILTER[k] = patch[k];
+    fs.value = FILTER.sev; fc.value = FILTER.cat; fst.value = FILTER.status; $("q").value = FILTER.q;
+    renderList();
+    $("list").parentNode.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  }
+  function chips() {
+    var box = $("chips"); box.innerHTML = "";
+    [["owasp", "OWASP "], ["agent", "Reviewer: "], ["file", "File: "]].forEach(function (c) {
+      if (!FILTER[c[0]]) return;
+      var b = el("button", { type: "button", "class": "chip", "aria-label": "Remove filter " + c[1] + FILTER[c[0]] }, c[1] + FILTER[c[0]] + " ×");
+      b.onclick = function () { FILTER[c[0]] = ""; renderList(); };
+      box.appendChild(b);
+    });
+  }
+  function renderList() {
+    chips();
+    var q = FILTER.q.toLowerCase(), list = $("list");
     list.textContent = "";
-    var shown = data.findings.filter(function (f) {
-      if (sv && f.severity !== sv) return false;
-      if (cv && f.category !== cv) return false;
-      if (st && f.status !== st) return false;
-      if (q && (f.id + " " + f.title + " " + f.file + " " + f.description).toLowerCase().indexOf(q) < 0) return false;
+    var shown = findings.filter(function (f) {
+      if (FILTER.sev && f.severity !== FILTER.sev) return false;
+      if (FILTER.cat && f.category !== FILTER.cat) return false;
+      if (FILTER.status && f.status !== FILTER.status) return false;
+      if (FILTER.owasp && String(f.owasp || "").toUpperCase().indexOf(FILTER.owasp) !== 0) return false;
+      if (FILTER.agent && (f.reported_by || []).indexOf(FILTER.agent) < 0) return false;
+      if (FILTER.file && f.file !== FILTER.file) return false;
+      if (q && [f.id, f.title, f.file, f.description, f.cwe, f.owasp].join(" ").toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
+    $("shown").textContent = shown.length + " of " + findings.length + " shown";
     if (!shown.length) { list.appendChild(el("div", { "class": "empty" }, "No findings match these filters.")); return; }
     shown.forEach(function (f) {
-      var d = el("details", { "class": "finding" });
-      var s = el("summary");
-      s.appendChild(sevBadge(f.severity));
+      var d = el("details", { "class": "finding" }), s = el("summary");
+      var b = el("span", { "class": "sev" }, f.severity); b.style.background = sevColor(f.severity);
+      s.appendChild(b);
       s.appendChild(el("span", { "class": "fid" }, f.id));
       s.appendChild(el("strong", null, f.title));
       s.appendChild(el("span", { "class": "loc" }, f.file + ":" + f.line));
       s.appendChild(el("span", { "class": "tag" }, f.category));
       s.appendChild(el("span", { "class": "tag" }, f.status + " · " + f.confidence + " confidence"));
       d.appendChild(s);
-      var b = el("div", { "class": "body" });
-      [["Description", f.description], ["Evidence", f.evidence, true], ["Potential impact", f.impact],
-       ["Recommended solution", f.recommendation]].forEach(function (p) {
-        b.appendChild(el("h3", null, p[0]));
-        b.appendChild(el(p[2] ? "pre" : "p", null, p[1]));
+      var body = el("div", { "class": "body" });
+      [["Description", f.description], ["Evidence", f.evidence, true], ["Potential impact", f.impact], ["Recommended solution", f.recommendation]].forEach(function (p) {
+        body.appendChild(el("h3", null, p[0])); body.appendChild(el(p[2] ? "pre" : "p", null, p[1]));
       });
       if (f.related_locations && f.related_locations.length) {
-        b.appendChild(el("h3", null, "Also at"));
-        b.appendChild(el("p", { "class": "loc" }, f.related_locations.map(function (l) {
-          return l.file + ":" + l.line; }).join(", ")));
+        body.appendChild(el("h3", null, "Also at"));
+        body.appendChild(el("p", { "class": "loc" }, f.related_locations.map(function (l) { return l.file + ":" + l.line; }).join(", ")));
       }
-      b.appendChild(el("p", { "class": "meta" }, "Reported by " + (f.reported_by || []).join(", ")));
-      d.appendChild(b);
-      list.appendChild(d);
+      var refs = [f.cwe, f.owasp].filter(Boolean).join(" · ");
+      body.appendChild(el("p", { "class": "sub" }, "Reported by " + (f.reported_by || []).join(", ") + (refs ? " · " + refs : "")));
+      d.appendChild(body); list.appendChild(d);
     });
   }
-  ["q", "f-sev", "f-cat", "f-status"].forEach(function (id) {
-    document.getElementById(id).addEventListener("input", render);
-  });
-  render();
+  $("q").addEventListener("input", function () { FILTER.q = this.value; renderList(); });
+  fs.addEventListener("input", function () { FILTER.sev = this.value; renderList(); });
+  fc.addEventListener("input", function () { FILTER.cat = this.value; renderList(); });
+  fst.addEventListener("input", function () { FILTER.status = this.value; renderList(); });
+  $("clear").onclick = function () { for (var k in FILTER) FILTER[k] = ""; setFilter({}); };
+
+  drawAll();
+  renderList();
 })();
 </script>
 </body>

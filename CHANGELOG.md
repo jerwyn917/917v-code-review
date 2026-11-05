@@ -5,9 +5,15 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 ## [Unreleased]
 
 ### Added
+- Dashboard analytics with amCharts 5 (5.21.5, cdnjs) in 917 Ventures branding: health gauge, severity donut, category × severity bars, OWASP Top 10 columns, hotspot files, and a reviewer × severity heatmap. Chart clicks cross-filter the findings list. Light and dark themes; HTML-bar fallback offline.
+- In-chat results widget (generative UI): `render-reports.py --widget` writes `.work/chat-widget.html`, which the orchestrator renders with the host's inline visual tool when one is available. It has KPI cards, amCharts charts, a severity filter, and `sendPrompt` buttons ("Explain ↗", fix plan, open dashboard).
+- `templates/assets/917v-logo.datauri`: 917 Ventures logo for the dashboard header.
 - Standalone Agent Skill build: `tools/build-skill.py` packages the review as `dist/917v-code-review/` and `dist/917v-code-review.zip` for `~/.claude/skills/`, claude.ai, or the API. Orchestrator in `skill-src/SKILL.md`; agents become reviewer briefs in `references/reviewers/`, run as read-only general-purpose subagents or sequentially where subagents are unavailable.
 - `render-reports.py` reads the version from a `VERSION` file when `.claude-plugin/plugin.json` is absent (skill layout).
 - `tests/test_build_skill.py`.
+
+### Changed
+- `render-reports.py` checks template placeholders against the template, not the filled output, so finding text containing `{{...}}` no longer aborts rendering.
 
 ## [1.0.0] - 2026-11-03
 

@@ -7,7 +7,8 @@
 - [security-review.md](nestjs-orders-api/security-review.md)
 - [architecture-review.md](nestjs-orders-api/architecture-review.md)
 - [recommendations.md](nestjs-orders-api/recommendations.md)
-- [dashboard.html](nestjs-orders-api/dashboard.html): open it in a browser
+- [dashboard.html](nestjs-orders-api/dashboard.html): open it in a browser. amCharts analytics: health gauge, severity, category, OWASP, hotspot files, reviewer heatmap
+- [chat-widget.html](nestjs-orders-api/chat-widget.html): the in-chat results widget, the fragment the orchestrator passes to the host's inline visual tool (copied from `.work/`)
 - [findings.json](nestjs-orders-api/findings.json): machine-readable findings
 - `summary.json` and `merges.json`: the orchestrator's narrative and its duplicate-merge decisions, copied from `.work/` for reference
 

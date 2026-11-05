@@ -10,12 +10,15 @@ Inputs:
 Outputs (in --out, normally docs/code-review/):
   executive-summary.md, detailed-findings.md, security-review.md,
   architecture-review.md, recommendations.md, and dashboard.html (--html)
+  --widget PATH also writes the in-chat results widget: an HTML fragment for a
+  host's inline visual tool (generative UI in the chat). It is not a report.
 
-Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o docs/code-review [--html]
+Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o docs/code-review [--html] [--widget W]
 """
 
 import argparse
 import datetime
+import html as htmllib
 import json
 import math
 import os
@@ -239,15 +242,49 @@ def no_issue_list(fdata, agents):
 def fill(template_name, values):
     with open(os.path.join(TEMPLATES, template_name), "r", encoding="utf-8") as fh:
         text = fh.read()
-    for k, v in values.items():
-        text = text.replace("{{%s}}" % k, str(v))
-    leftover = re.findall(r"\{\{(\w+)\}\}", text)
-    if leftover:
-        raise SystemExit("template %s has unfilled placeholders: %s" % (template_name, ", ".join(leftover)))
-    return text
+    # Check the template, not the output: inserted content (e.g. finding text) may contain "{{...}}".
+    missing = sorted(set(re.findall(r"\{\{(\w+)\}\}", text)) - set(values))
+    if missing:
+        raise SystemExit("template %s has unfilled placeholders: %s" % (template_name, ", ".join(missing)))
+    return re.sub(r"\{\{(\w+)\}\}", lambda m: str(values[m.group(1)]), text)
 
 
-def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None, html=False):
+def script_json(obj):
+    """JSON that is safe to inline inside a <script> element."""
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+
+
+def logo_data_uri():
+    try:
+        with open(os.path.join(TEMPLATES, "assets", "917v-logo.datauri"), encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
+
+def chat_widget(fdata, stack, common, hl):
+    """In-chat results widget (HTML fragment) for a host's inline visual tool."""
+    findings = fdata["findings"]
+    totals = fdata["totals"]
+    sev = totals["by_severity"]
+    cats = sorted(((c, n) for c, n in totals["by_category"].items() if n), key=lambda x: -x[1])
+    payload = {
+        "repo": common["repository"], "total": totals["findings"], "sev": sev, "status": totals["by_status"],
+        "health": hl, "cats": [list(c) for c in cats], "files": len({f["file"] for f in findings}),
+        "files_considered": (stack or {}).get("file_count"),
+        "findings": [[f["id"], f["severity"], f["category"], f["title"][:110], f["file"], f["line"], f["status"]]
+                     for f in findings],
+    }
+    top = ", ".join("%d %s" % (sev[s], s.lower()) for s in SEVERITIES if sev.get(s))
+    summary = "%s of %s: %d findings (%s), code health %s/100 (%s), with severity and category charts and a " \
+              "filterable list of findings." % (common["review_type"], common["repository"], totals["findings"],
+                                                top or "none", hl["score"], hl["rating"])
+    meta = " · ".join(x for x in ["Code review", common["repository"], common["review_type"], common["date"]] if x)
+    return fill("chat-widget.html", {"widget_summary": htmllib.escape(summary), "widget_meta": htmllib.escape(meta),
+                                     "widget_json": script_json(payload)})
+
+
+def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None, html=False, widget_path=None):
     findings = fdata["findings"]
     totals = fdata["totals"]
     hl = health(findings)
@@ -349,14 +386,20 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
         })),
     }
     if html:
-        payload = dict(common, commit=commit_info(root), totals=totals, health=hl, findings=findings)
-        data_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
-        files["dashboard.html"] = fill("dashboard.html", {"data_json": data_json})
+        payload = dict(common, commit=commit_info(root), totals=totals, health=hl, findings=findings,
+                       files_considered=(stack or {}).get("file_count"), validation=fdata.get("validation") or {})
+        files["dashboard.html"] = fill("dashboard.html", {"data_json": script_json(payload),
+                                                          "logo_data_uri": logo_data_uri()})
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
         for name, text in files.items():
             with open(os.path.join(out_dir, name), "w", encoding="utf-8") as fh:
                 fh.write(text.rstrip("\n") + "\n")
+    if widget_path:
+        widget = chat_widget(fdata, stack, common, hl)
+        os.makedirs(os.path.dirname(os.path.abspath(widget_path)), exist_ok=True)
+        with open(widget_path, "w", encoding="utf-8") as fh:
+            fh.write(widget.rstrip("\n") + "\n")
     return files, hl
 
 
@@ -369,12 +412,14 @@ def main():
     ap.add_argument("--scope")
     ap.add_argument("--integrity")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--html", action="store_true", help="also write the self-contained dashboard.html")
+    ap.add_argument("--html", action="store_true", help="also write dashboard.html (amCharts analytics)")
+    ap.add_argument("--widget", help="also write the in-chat results widget (HTML fragment) to this path")
     a = ap.parse_args()
     opt = lambda p: load_json(p) if p and os.path.exists(p) else None
     files, hl = render(a.root, load_json(a.findings), opt(a.stack), opt(a.summary) or {}, opt(a.scope),
-                       opt(a.integrity), a.out, a.html)
-    dump_json({"written": sorted(os.path.join(a.out, n) for n in files), "health": hl})
+                       opt(a.integrity), a.out, a.html, a.widget)
+    written = sorted(os.path.join(a.out, n) for n in files) + ([a.widget] if a.widget else [])
+    dump_json({"written": written, "health": hl})
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ Run: python3 -m unittest discover -s tests -v   (from the plugin root)
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -329,6 +330,32 @@ class TestValidateAndRender(unittest.TestCase):
         self.assertEqual(hl["score"], 93)
         self.assertNotIn("{{", "".join(files.values()))
         self.assertNotIn("</script><", files["dashboard.html"].split('type="application/json">')[1].split("</script>")[0])
+        dash = files["dashboard.html"]
+        self.assertIn("cdnjs.cloudflare.com/ajax/libs/amcharts5/5.21.5/index.js", dash)
+        self.assertIn('src="data:image/png;base64,', dash)
+        payload = json.loads(dash.split('type="application/json">')[1].split("</script>")[0])
+        self.assertEqual(payload["findings"][0]["id"], "SEC-001")
+        self.assertIn("validation", payload)
+
+    def test_chat_widget(self):
+        res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"],
+                                 "findings": [self.base(owasp="A03:2021", cwe="CWE-89",
+                                                        title="Injection via {{q}} </script><b>x")]})
+        widget = os.path.join(self.repo, "docs", "code-review", ".work", "chat-widget.html")
+        render.render(self.repo, res, detect.detect(self.repo), {}, out_dir=None, widget_path=widget)
+        text = open(widget, encoding="utf-8").read()
+        # Host widget rules: fragment only, no comments, scripts last, guarded sendPrompt, prefixed ids.
+        for banned in ("<!doctype", "<html", "<head", "<body", "<!--", "/*"):
+            self.assertNotIn(banned, text.lower())
+        self.assertLess(text.index("<style>"), text.index('<div class="v917cr">'))
+        self.assertLess(text.index('<div class="v917cr">'), text.index("<script"))
+        self.assertIn('typeof sendPrompt === "function"', text)
+        self.assertEqual(re.findall(r'id="(?!v917cr-)[^"]+"', text), [])
+        data = json.loads(text.split("const DATA = ")[1].split(";\n")[0].replace("<\\/", "</"))
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["findings"][0][0], "SEC-001")
+        self.assertIn("{{q}}", data["findings"][0][3])          # placeholder-like text survives fill()
+        self.assertNotIn("</script><b>", text)                  # cannot break out of the script element
 
     def test_integrity(self):
         snap = integrity.snapshot(self.repo)

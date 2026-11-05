@@ -48,5 +48,6 @@ Rules:
 | `security-review.md` | Security overview, OWASP Top 10 table, Security findings, security-relevant findings from other categories, areas checked |
 | `architecture-review.md` | Architecture overview, structure, dependency analysis, Architecture and Code Quality findings |
 | `recommendations.md` | Strategic recommendations, then actions by priority (1: Critical/High, 2: Medium, 3: Low/Info), positives |
-| `dashboard.html` | Self-contained interactive dashboard (no network requests) |
+| `dashboard.html` | Interactive dashboard in 917 Ventures branding: amCharts 5 health gauge, severity donut, category, OWASP, hotspot-file and reviewer-heatmap charts that cross-filter the findings list. Loads amCharts from cdnjs and fonts from Google Fonts; review data never leaves the page; HTML-bar fallback offline |
+| `.work/chat-widget.html` | In-chat results widget (HTML fragment) for a host's inline visual tool; not a report |
 | `findings.json` | Validated findings for tooling and CI |

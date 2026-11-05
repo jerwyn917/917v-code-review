@@ -153,10 +153,22 @@ Verify read-only, then render:
 ```bash
 python3 "$P/scripts/integrity.py" verify "$ROOT" "$WORK/baseline.json" -o "$WORK/integrity.json"
 python3 "$P/scripts/render-reports.py" --root "$ROOT" --findings "$OUT/findings.json" --stack "$WORK/stack.json" \
-  --summary "$WORK/summary.json" [--scope "$WORK/scope.json"] --integrity "$WORK/integrity.json" -o "$OUT" --html
+  --summary "$WORK/summary.json" [--scope "$WORK/scope.json"] --integrity "$WORK/integrity.json" -o "$OUT" --html --widget "$WORK/chat-widget.html"
 ```
 
-Omit `--html` when `--no-html` was requested. If the integrity check reports changes, report them prominently. They may come from the user editing files during the review; never hide them.
+Omit `--html` when `--no-html` was requested. `--widget` writes the in-chat results widget used in the final message; it is scratch output, not a report. If the integrity check reports changes, report them prominently. They may come from the user editing files during the review; never hide them.
+
+## Show the results in the chat (generative UI)
+
+When this session has an inline visual tool that renders HTML in the conversation (for example `show_widget` from the `visualize` server on Claude Desktop or claude.ai), show the results there before the text summary:
+
+1. If the tool has a setup step (such as `read_me`), call it first and do not mention it.
+2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment: KPI cards, amCharts severity and category charts, a severity filter, and the top findings, each with an "Explain ↗" button. It follows the host widget rules: fragment only, host theme tokens, no comments, and HTML bars if amCharts cannot load.
+3. Do not rebuild, restyle, or trim the fragment. If the file is missing or the tool fails, skip this step and say so in one line.
+
+Without such a tool, as in the Claude Code terminal, skip this step. The text summary below covers the same results.
+
+Buttons in the widget send messages to the chat as if the user typed them: "Explain finding SEC-004 …", "Make a prioritized fix plan …", "Open the full code review dashboard …". Answer them from `findings.json` and the cited source, and keep the read-only rule. Explaining or planning a fix is not permission to edit files. For the dashboard, open or attach `docs/code-review/dashboard.html` if the host can, otherwise give its path.
 
 ## Final message to the user
 
@@ -164,6 +176,6 @@ Keep it short:
 - The review type and scope, and the agents run and skipped, each with a reason.
 - Finding counts by severity, and the Confirmed/Potential split.
 - The top 3–5 risks: ID, title, and `file:line`.
-- Links to `docs/code-review/executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html`, and `findings.json`.
+- Links to `docs/code-review/executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), and `findings.json`.
 - The read-only check result and the validation stats (rejected and merged counts).
 - That `docs/code-review/` is new output the user may want to commit or add to `.gitignore`. Do not do either yourself.

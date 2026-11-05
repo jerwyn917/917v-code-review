@@ -7,7 +7,7 @@ The plugin stays the source of truth. This script assembles:
     SKILL.md                 from skill-src/SKILL.md (standalone orchestrator)
     VERSION                  from .claude-plugin/plugin.json
     scripts/*.py             deterministic helpers (unchanged)
-    templates/*              report templates + dashboard (unchanged)
+    templates/*              report templates, dashboard, chat widget, logo asset (unchanged)
     references/*.md          schema, rubric, ownership, checklists, protocol
     references/reviewers/    the eight specialist agents, rewritten as briefs
   dist/917v-code-review.zip  the same folder, zipped for upload to claude.ai
@@ -92,6 +92,7 @@ def build(out_root):
 
     copy_files(os.path.join(REPO, "scripts"), os.path.join(dst, "scripts"), r"[\w-]+\.py")
     copy_files(os.path.join(REPO, "templates"), os.path.join(dst, "templates"), r"[\w-]+\.(md|html)")
+    copy_files(os.path.join(REPO, "templates", "assets"), os.path.join(dst, "templates", "assets"), r"[\w-]+\.datauri")
     copy_files(os.path.join(REPO, "skills", "comprehensive-review", "references"),
                os.path.join(dst, "references"), r"[\w-]+\.md")
 

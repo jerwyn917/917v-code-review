@@ -135,7 +135,8 @@ Prerequisites on each machine: `git` and `python3` 3.8 or newer.
 ## 6. Data handling note for security reviewers
 
 The plugin runs inside each developer's Claude Code session under the organization's existing Claude data policies. It adds:
-- No network calls. The scripts are offline and stdlib-only, and the dashboard makes no external requests.
+- No network calls from the scripts. They are offline and stdlib-only.
+- The dashboard, and the in-chat widget where the host renders one, load amCharts 5 from `cdnjs.cloudflare.com` and fonts from Google Fonts when opened. They send no review data: findings are inlined in the page. Offline they fall back to built-in HTML charts.
 - No MCP servers and no hooks.
 - Writes only to `docs/code-review/` in the reviewed repository.
 - Online dependency audits only when the developer explicitly authorizes them in the conversation.
