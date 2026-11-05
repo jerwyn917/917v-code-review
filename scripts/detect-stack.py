@@ -17,7 +17,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import dump_json, iter_repo_files, read_text  # noqa: E402
+from _common import check_output_path, dump_json, iter_repo_files, read_text  # noqa: E402
 
 LANG_BY_EXT = {
     ".ts": "TypeScript", ".tsx": "TypeScript", ".mts": "TypeScript", ".cts": "TypeScript",
@@ -714,6 +714,8 @@ def main():
     ap.add_argument("--brief", action="store_true", help="also print a compact text summary to stderr")
     ap.add_argument("--files-out", help="write the reviewable file inventory (one path per line) here")
     args = ap.parse_args()
+    check_output_path(args.root, args.output)
+    check_output_path(args.root, args.files_out)
     result = detect(args.root)
     dump_json(result, args.output)
     if args.files_out:

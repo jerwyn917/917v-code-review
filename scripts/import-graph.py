@@ -16,7 +16,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import dump_json, iter_repo_files, read_text  # noqa: E402
+from _common import check_output_path, dump_json, iter_repo_files, read_text  # noqa: E402
 
 JS_EXT = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".svelte")
 JS_IMPORT = re.compile(
@@ -266,7 +266,7 @@ def main():
     ap.add_argument("root")
     ap.add_argument("-o", "--output", default="-")
     a = ap.parse_args()
-    dump_json(analyze(a.root), a.output)
+    dump_json(analyze(a.root), check_output_path(a.root, a.output))
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import OUTPUT_DIR, dump_json, git, is_git_repo, iter_repo_files, load_json  # noqa: E402
+from _common import OUTPUT_DIR, check_output_path, dump_json, git, is_git_repo, iter_repo_files, load_json  # noqa: E402
 
 
 def _sha(path):
@@ -74,6 +74,7 @@ def main():
     v.add_argument("baseline")
     v.add_argument("-o", "--output", default="-")
     a = ap.parse_args()
+    check_output_path(a.root, a.output)
     if a.cmd == "snapshot":
         dump_json(snapshot(a.root), a.output)
         return 0

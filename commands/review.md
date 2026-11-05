@@ -10,4 +10,4 @@ Invoke the `917v-code-review:comprehensive-review` skill and follow it exactly, 
 - mode=full
 - arguments: $ARGUMENTS
 
-If no path is given, review the current repository root. The review is read-only. Write only to `docs/code-review/` inside the reviewed directory.
+If no path is given, review the current repository root. The review is **analysis only**: it never creates, edits, or deletes project files and never applies fixes. Its only output is new files in `docs/code-review/`.

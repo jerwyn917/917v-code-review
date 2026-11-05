@@ -13,7 +13,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import dump_json, is_text_candidate, iter_repo_files, load_json, read_text, redact  # noqa: E402
+from _common import check_output_path, dump_json, is_text_candidate, iter_repo_files, load_json, read_text, redact  # noqa: E402
 
 CODE = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte", ".java", ".kt", ".py", ".php",
         ".go", ".rb", ".rs", ".cs", ".scala", ".groovy")
@@ -274,7 +274,7 @@ def main():
     ap.add_argument("-o", "--output", default="-")
     a = ap.parse_args()
     scope = load_json(a.scope) if a.scope else None
-    dump_json(scan(a.root, scope), a.output)
+    dump_json(scan(a.root, scope), check_output_path(a.root, a.output))
 
 
 if __name__ == "__main__":

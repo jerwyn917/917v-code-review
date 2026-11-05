@@ -94,7 +94,7 @@ Tie-breakers:
 
 ## Hard limits
 
-- Read-only: Read, Grep, and Glob only. Never claim you ran code, tests, or tools.
+- Analysis only: Read, Grep, and Glob. You cannot and must not change any file. Never claim you ran code, tests, or tools.
 - Without Grep or Glob, use `.work/files.txt` and the signals to find files, then Read them. Say so in `notes`.
 - Never cite a file you did not open, invent a line number, or include a secret value.
 - In a diff review, cover the changed lines and their direct call context. Report pre-existing issues elsewhere only when they are Critical or High, or interact with the change.

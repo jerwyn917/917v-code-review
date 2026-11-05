@@ -231,6 +231,62 @@ class TestSignalsAndGraph(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(out, ".work", "agents")))
             self.assertGreater(summary["leads"], 5)
 
+    def test_read_only_guards(self):
+        script = os.path.join(SCRIPTS, "prepare-review.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), repo)
+            # 1. A docs/code-review/ the project owns is never written to.
+            own = os.path.join(repo, "docs", "code-review")
+            os.makedirs(own)
+            with open(os.path.join(own, "checklist.md"), "w") as fh:
+                fh.write("team checklist\n")
+            p = subprocess.run([sys.executable, script, repo], capture_output=True, text=True)
+            self.assertEqual(p.returncode, _common.EXIT_OUTPUT_CONFLICT)
+            self.assertIn("did not create", p.stderr)
+            self.assertEqual(os.listdir(own), ["checklist.md"])
+            self.assertEqual(open(os.path.join(own, "checklist.md")).read(), "team checklist\n")
+            # 2. A folder holding only this tool's own outputs (older run) is claimed and marked.
+            os.remove(os.path.join(own, "checklist.md"))
+            with open(os.path.join(own, "scan.md"), "w") as fh:
+                fh.write("old\n")
+            subprocess.run([sys.executable, script, repo, "--mode", "scan"], check=True, capture_output=True)
+            self.assertTrue(os.path.isfile(os.path.join(own, _common.MARKER)))
+            # 3. Output paths inside the repo but outside docs/code-review/ are refused.
+            with self.assertRaises(SystemExit):
+                _common.check_output_path(repo, os.path.join(repo, "src", "x.json"))
+            self.assertEqual(_common.check_output_path(repo, os.path.join(own, "x.json")), os.path.join(own, "x.json"))
+            self.assertEqual(_common.check_output_path(repo, os.path.join(tmp, "x.json")), os.path.join(tmp, "x.json"))
+            p = subprocess.run([sys.executable, os.path.join(SCRIPTS, "scan-signals.py"), repo,
+                                "-o", os.path.join(repo, "src", "signals.json")], capture_output=True, text=True)
+            self.assertEqual(p.returncode, _common.EXIT_OUTPUT_CONFLICT)
+            self.assertFalse(os.path.exists(os.path.join(repo, "src", "signals.json")))
+            # 4. Only read-only git subcommands are allowed.
+            with self.assertRaises(SystemExit):
+                _common.git(repo, "checkout", "-b", "x")
+            with self.assertRaises(SystemExit):
+                _common.git(repo, "-c", "a=b", "stash")
+
+    def test_git_index_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), repo)
+            git(repo, "init", "-q", "-b", "main")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-qm", "init")
+            with open(os.path.join(repo, "src", "main.ts"), "a") as fh:
+                fh.write("\n// change\n")
+            index = os.path.join(repo, ".git", "index")
+            os.utime(os.path.join(repo, "src", "main.ts"))      # a stale stat that git status would normally refresh
+            before = (open(index, "rb").read(), os.stat(index).st_mtime_ns)
+            subprocess.run([sys.executable, os.path.join(SCRIPTS, "prepare-review.py"), repo, "--mode", "diff"],
+                           check=True, capture_output=True)
+            files, _ = render.render(repo, {"findings": [], "totals": {"findings": 0, "by_severity": {s: 0 for s in _common.SEVERITIES},
+                                     "by_category": {c: 0 for c in _common.CATEGORIES}, "by_status": {"Confirmed": 0, "Potential": 0}}},
+                                     None, {}, out_dir=None)
+            self.assertIn("with uncommitted changes", files["executive-summary.md"])   # git status ran
+            self.assertEqual((open(index, "rb").read(), os.stat(index).st_mtime_ns), before)
+
     def test_cycles(self):
         g = graph.Graph(os.path.join(FIXTURES, "nestjs-orders-api")).build()
         cycles = g.cycles()

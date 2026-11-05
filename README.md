@@ -8,7 +8,7 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 - **Validation of every finding against the source**. The file must exist, the line must exist, and the evidence must appear in the file. Wrong line numbers are corrected, unverifiable claims are rejected, duplicates are merged, and secrets are redacted.
 - **Consolidated reports** in `docs/code-review/`: executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, and `findings.json`.
 - **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, and "Explain ↗" buttons that send follow-up questions back to Claude.
-- **Read-only by default.** Every file is hashed before and after the review, and the report states whether anything outside `docs/code-review/` changed.
+- **Analysis only, never modifies your code.** It never edits, formats, or deletes project files, and never applies fixes. The only output is new files in `docs/code-review/`, claimed with a `.917v-code-review` marker; if your project already has its own folder with that name, the review stops without writing. The scripts refuse any other output path and run only read-only Git commands, without rewriting `.git/index`. Every file is hashed before and after, and the report states whether anything outside `docs/code-review/` changed.
 
 ## Commands
 

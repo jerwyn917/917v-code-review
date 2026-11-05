@@ -19,7 +19,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import OUTPUT_DIR, dump_json, eprint, git, is_git_repo, read_text  # noqa: E402
+from _common import OUTPUT_DIR, check_output_path, dump_json, eprint, git, is_git_repo, read_text  # noqa: E402
 
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
@@ -138,7 +138,7 @@ def main():
         scope = compute(a.root, "uncommitted")
     if not scope["files"]:
         eprint("note: no changed files in scope (%s)" % scope["description"])
-    dump_json(scope, a.output)
+    dump_json(scope, check_output_path(a.root, a.output))
 
 
 if __name__ == "__main__":

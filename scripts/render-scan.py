@@ -22,7 +22,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import dump_json, load_json  # noqa: E402
+from _common import OUTPUT_DIR, check_output_path, claim_output_dir, dump_json, load_json  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
     "render_reports", os.path.join(os.path.dirname(os.path.abspath(__file__)), "render-reports.py"))
@@ -165,6 +165,9 @@ def main():
     ap.add_argument("--scope")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
+    check_output_path(a.root, a.out)
+    if os.path.realpath(a.out) == os.path.realpath(os.path.join(a.root, OUTPUT_DIR)):
+        claim_output_dir(a.root)
     opt = lambda p: load_json(p) if p and os.path.exists(p) else None
     _, summary = render(a.root, load_json(a.stack), load_json(a.signals), opt(a.imports), opt(a.scope), a.out)
     summary["written"] = os.path.join(a.out, "scan.md")

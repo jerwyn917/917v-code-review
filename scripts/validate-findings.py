@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import (CATEGORIES, CONFIDENCES, REDACTED, SEVERITIES, SEVERITY_RANK, STATUSES,  # noqa: E402
-                     dump_json, eprint, load_json, read_text, redact, rel_inside, secret_values)
+                     check_output_path, dump_json, eprint, load_json, read_text, redact, rel_inside, secret_values)
 
 REQUIRED = ["severity", "category", "title", "description", "file", "line", "evidence", "impact",
             "recommendation", "confidence"]
@@ -432,7 +432,7 @@ def main():
     a = ap.parse_args()
     result = run(a.root, a.inputs, load_json(a.scope) if a.scope else None,
                  load_json(a.merges) if a.merges and os.path.exists(a.merges) else None)
-    dump_json(result, a.output)
+    dump_json(result, check_output_path(a.root, a.output))
     v = result["validation"]
     eprint("validated: %d submitted, %d accepted, %d rejected, %d duplicates merged, %d line corrections -> %d findings"
            % (v["submitted"], v["accepted"], v["rejected"], v["duplicates_merged"], v["line_corrections"],

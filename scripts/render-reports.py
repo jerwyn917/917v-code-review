@@ -29,7 +29,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import CATEGORIES, SEVERITIES, dump_json, git, is_git_repo, load_json  # noqa: E402
+from _common import (CATEGORIES, OUTPUT_DIR, SEVERITIES, check_output_path, claim_output_dir, dump_json,  # noqa: E402
+                     git, is_git_repo, load_json)
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES = os.path.join(PLUGIN_ROOT, "templates")
@@ -419,6 +420,10 @@ def main():
     ap.add_argument("--html", action="store_true", help="also write dashboard.html (amCharts analytics)")
     ap.add_argument("--widget", help="also write the in-chat results widget (HTML fragment) to this path")
     a = ap.parse_args()
+    for path in (a.out, a.widget, a.baseline):
+        check_output_path(a.root, path)
+    if os.path.realpath(a.out) == os.path.realpath(os.path.join(a.root, OUTPUT_DIR)):
+        claim_output_dir(a.root)
     opt = lambda p: load_json(p) if p and os.path.exists(p) else None
     integ = opt(a.integrity)
     if a.baseline:

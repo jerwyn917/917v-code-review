@@ -1,8 +1,13 @@
 """Shared constants and helpers for the 917v-code-review scripts.
 
 Standard library only (Python 3.8+). Every script in this folder is read-only
-with respect to the reviewed repository: they read source files and write
-only to the paths given on the command line (normally docs/code-review/).
+with respect to the reviewed repository:
+- source files are only read; no script edits, formats, moves, or deletes them;
+- Git is called only with read-only subcommands, and with GIT_OPTIONAL_LOCKS=0 so
+  `git status`/`git diff` do not rewrite .git/index;
+- output goes only to <root>/docs/code-review/ (claimed with an ownership marker,
+  never a folder of the project's own) or to a path outside the repository
+  (`check_output_path`).
 """
 
 import json
@@ -41,6 +46,19 @@ AGENTS = [
 ]
 
 OUTPUT_DIR = os.path.join("docs", "code-review")
+MARKER = ".917v-code-review"   # ownership marker inside OUTPUT_DIR
+OWN_OUTPUTS = {MARKER, ".work", "executive-summary.md", "detailed-findings.md", "security-review.md",
+               "architecture-review.md", "recommendations.md", "dashboard.html", "findings.json", "scan.md"}
+READ_ONLY_GIT = {"rev-parse", "ls-files", "diff", "merge-base", "status", "log", "show", "cat-file"}
+EXIT_OUTPUT_CONFLICT = 4
+
+
+class ReadOnlyViolation(SystemExit):
+    """Raised when a write would land outside the review's own output folder."""
+
+    def __init__(self, message):
+        eprint("read-only guard: " + message)
+        super().__init__(EXIT_OUTPUT_CONFLICT)
 
 # Directories never worth reviewing (dependencies, build output, VCS).
 IGNORE_DIRS = {
@@ -81,11 +99,18 @@ def dump_json(data, path=None):
             fh.write(text)
 
 
+def _git_env():
+    env = dict(os.environ)
+    env["GIT_OPTIONAL_LOCKS"] = "0"   # never refresh/rewrite .git/index during the review
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def is_git_repo(root):
     try:
         out = subprocess.run(
             ["git", "-C", root, "rev-parse", "--is-inside-work-tree"],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, check=False, env=_git_env(),
         )
         return out.returncode == 0 and out.stdout.strip() == "true"
     except FileNotFoundError:
@@ -94,8 +119,13 @@ def is_git_repo(root):
 
 def git(root, *args):
     """Run a read-only git command and return stdout (raises on failure)."""
+    i = 0
+    while i < len(args) and args[i] == "-c":   # skip leading `-c key=value` config options
+        i += 2
+    if i >= len(args) or args[i] not in READ_ONLY_GIT:
+        raise ReadOnlyViolation("refusing non-read-only git command: git %s" % " ".join(args))
     out = subprocess.run(
-        ["git", "-C", root] + list(args), capture_output=True, text=True, check=False
+        ["git", "-C", root] + list(args), capture_output=True, text=True, check=False, env=_git_env()
     )
     if out.returncode != 0:
         raise RuntimeError("git %s failed: %s" % (" ".join(args), out.stderr.strip()))
@@ -254,3 +284,44 @@ def rel_inside(root, rel):
     root = os.path.realpath(root)
     full = os.path.realpath(os.path.join(root, rel))
     return full == root or full.startswith(root + os.sep)
+
+
+def _inside(path, folder):
+    path, folder = os.path.realpath(path), os.path.realpath(folder)
+    return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
+
+
+def check_output_path(root, path):
+    """Allow writes only under <root>/docs/code-review/ or outside the repository entirely."""
+    if path in (None, "-"):
+        return path
+    if _inside(path, os.path.join(root, OUTPUT_DIR)) or not _inside(path, root):
+        return path
+    raise ReadOnlyViolation("%s is inside the reviewed repository but outside %s/; the review never writes "
+                            "there" % (path, OUTPUT_DIR))
+
+
+def claim_output_dir(root):
+    """Make sure <root>/docs/code-review/ is ours before writing to it, and mark it.
+
+    The folder may be new, already carry our marker, or hold only file names this
+    tool produces (a run from before the marker existed). Anything else is the
+    project's own content and is never overwritten.
+    """
+    out = os.path.join(os.path.abspath(root), OUTPUT_DIR)
+    if os.path.isdir(out) and not os.path.exists(os.path.join(out, MARKER)):
+        foreign = sorted(set(os.listdir(out)) - OWN_OUTPUTS)
+        if foreign:
+            raise ReadOnlyViolation(
+                "%s already exists and contains files this review did not create (%s). It belongs to the "
+                "project, so nothing was written. Move it, or review a copy of the repository."
+                % (out, ", ".join(foreign[:5])))
+    elif os.path.exists(out) and not os.path.isdir(out):
+        raise ReadOnlyViolation("%s exists and is not a folder; nothing was written" % out)
+    os.makedirs(out, exist_ok=True)
+    marker = os.path.join(out, MARKER)
+    if not os.path.exists(marker):
+        with open(marker, "w", encoding="utf-8") as fh:
+            fh.write("Created by 917v-code-review. Everything in this folder is review output; the review never "
+                     "writes anywhere else in the repository.\n")
+    return out

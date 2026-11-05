@@ -14,6 +14,11 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 - `tests/test_build_skill.py`.
 
 ### Changed
+- Stricter analysis-only guarantees:
+  - Git runs only allowlisted read-only subcommands, with `GIT_OPTIONAL_LOCKS=0`, so `git status` and `git diff` no longer rewrite `.git/index`.
+  - Every script refuses output paths inside the repository but outside `docs/code-review/`.
+  - `docs/code-review/` is claimed with a `.917v-code-review` marker, and a project's own folder of that name is never written to (exit code 4).
+  - Skills, commands, and the reviewer protocol now say the review never edits files or applies fixes, even when asked mid-review.
 - Faster reviews and scans, with fewer round trips and less instruction text to read:
   - `scripts/prepare-review.py` replaces about 8 orchestrator calls (baseline, stack, scope, signals, import graph, work-dir setup) with one. It also writes a per-agent inputs file (`.work/agents/<agent>.md`: stack digest, scope, priority files, that agent's signals, matching stack-checklist sections), so agent prompts are a few lines instead of hand-assembled context.
   - `render-reports.py --baseline` runs the read-only integrity check in the same call as rendering.

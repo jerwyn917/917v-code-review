@@ -16,6 +16,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/prepare-review.py" "<ROOT>" --mode scan [
 It writes `<ROOT>/docs/code-review/scan.md` (and scratch files in `.work/`, which are git-ignored) and prints the stack digest plus a JSON summary.
 
 - **Exit code 3:** nothing changed for that selector. Say so, suggest the other selectors, and stop.
+- **Exit code 4:** the project already has its own `docs/code-review/` folder. Nothing was written. Say so and stop; never move or delete it.
 - **No `python3`:** say the quick scan needs Python 3, and stop.
 
 Reply from the printed summary only. Do not open source files to judge the leads; that is what the full review does. Keep it short:
@@ -26,4 +27,4 @@ Reply from the printed summary only. Do not open source files to judge the leads
 - A link to `docs/code-review/scan.md`.
 - The next step: `/917v-code-review:review` (or `review-diff` with the same selector), naming the agents from `recommended_agents`.
 
-Rules: read-only (write only under `docs/code-review/`), no network, never print secret values (they are already redacted), and never present a lead as a confirmed issue. `docs/code-review/` is new output the user may commit or add to `.gitignore`. Do not do either yourself.
+Rules: analysis only (never edit project files or apply fixes; the only output is new files under `docs/code-review/`), no network, never print secret values (they are already redacted), and never present a lead as a confirmed issue. `docs/code-review/` is new output the user may commit or add to `.gitignore`. Do not do either yourself.

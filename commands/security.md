@@ -10,4 +10,4 @@ Invoke the `917v-code-review:comprehensive-review` skill and follow it exactly, 
 - mode=security
 - arguments: $ARGUMENTS
 
-Only `security-reviewer` runs. `devops-reviewer` is added, limited to infrastructure-security items, when Docker, IaC, or CI configuration is detected. The review is read-only. Do not run online scanners or send code anywhere unless the user explicitly authorizes it.
+Only `security-reviewer` runs. `devops-reviewer` is added, limited to infrastructure-security items, when Docker, IaC, or CI configuration is detected. The review is **analysis only**: it never edits project files or applies fixes. Do not run online scanners or send code anywhere unless the user explicitly authorizes it.

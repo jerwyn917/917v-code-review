@@ -27,7 +27,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from _common import OUTPUT_DIR, dump_json  # noqa: E402
+from _common import OUTPUT_DIR, claim_output_dir, dump_json  # noqa: E402
 
 PLUGIN_ROOT = os.path.dirname(HERE)
 
@@ -174,7 +174,7 @@ def main():
     a = ap.parse_args()
 
     root = os.path.abspath(a.root)
-    out = os.path.join(root, OUTPUT_DIR)
+    out = claim_output_dir(root)   # never writes into a docs/code-review/ the project owns
     work = os.path.join(out, ".work")
     os.makedirs(os.path.join(work, "raw"), exist_ok=True)
     with open(os.path.join(work, ".gitignore"), "w", encoding="utf-8") as fh:

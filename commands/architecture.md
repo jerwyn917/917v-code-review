@@ -10,4 +10,4 @@ Invoke the `917v-code-review:comprehensive-review` skill and follow it exactly, 
 - mode=architecture
 - arguments: $ARGUMENTS
 
-Only `architecture-reviewer` runs. It covers the Architecture and Code Quality categories and is given the import-cycle analysis from `scripts/import-graph.py`. The review is read-only.
+Only `architecture-reviewer` runs. It covers the Architecture and Code Quality categories and is given the import-cycle analysis from `scripts/import-graph.py`. The review is **analysis only**: it never edits project files or applies fixes.

@@ -11,7 +11,12 @@ Skill root: the directory that contains this `SKILL.md` (Claude Code shows it as
 
 ## Rules
 
-1. **Read-only.** Write only inside `<ROOT>/docs/code-review/`. No builds, tests, migrations, installs, formatting, or Git changes (`add`, `commit`, `stash`, `checkout`, `reset`). If the user asks for fixes, finish the review first; fixes are a separate step they must ask for.
+1. **Analysis only: never modify the repository.** This skill reads and analyzes code; it does not change it.
+   - Never create, edit, move, rename, format, or delete any project file.
+   - Never apply a fix, even when asked during the review or by a widget button. Give the recommendation and say that applying it is outside this skill.
+   - No builds, tests, migrations, installs, or state-changing Git commands (`add`, `commit`, `stash`, `checkout`, `reset`, `apply`).
+   - The only writes are this skill's own new files under `<ROOT>/docs/code-review/`, which the scripts claim with a `.917v-code-review` marker. Use your Write tool only for files in `$WORK/`.
+   - The scripts refuse other output paths and call Git without index refreshes. The final integrity check proves nothing else changed.
 2. **No network with source code.** No online scanners (`npm audit`, `pip-audit`, `snyk`), no uploads, and no URL fetches unless the user explicitly authorizes them in this conversation.
 3. **No invented facts.** Every finding cites a real file, line, and verbatim evidence. Never present a hypothesis as a confirmed vulnerability, and never claim a command ran unless it did.
 4. **Never expose secrets.** Write `[REDACTED]` in evidence and in messages.
@@ -44,7 +49,8 @@ python3 "$S/scripts/prepare-review.py" "$ROOT" --mode <mode> [--staged | --branc
 That single call creates `$WORK` with its `.gitignore`, takes the integrity baseline, detects the stack, computes the diff scope, collects signals and the import graph, and writes one inputs file per reviewer to `$WORK/agents/<reviewer>.md`. It prints the stack digest and a JSON summary with `recommended_agents`, `skipped_agents`, signal counts, and cycles.
 
 - **Exit code 3** (`nothing_to_review`): tell the user there are no changes for that selector, suggest the others, and stop.
-- **No `python3`:** tell the user, then work in **manual mode**. Do every step by reading files directly, write the reports by hand in the format of `$S/templates/`, and state in the executive summary that automated validation was unavailable.
+- **Exit code 4** (read-only guard): the project already has its own `docs/code-review/` folder, or an output path pointed into the source tree. Nothing was written. Tell the user what the message says and stop. Never move, rename, or delete their folder yourself.
+- **No `python3`:** tell the user, then work in **manual mode**. Do every step by reading files directly, create `docs/code-review/` only if it does not exist yet, write the reports by hand in the format of `$S/templates/`, and state in the executive summary that automated validation was unavailable.
 - If `$OUT` already holds reports, they will be replaced. Say so at the end.
 
 ## Quick scan mode
@@ -141,7 +147,7 @@ If this session has an inline visual tool that renders HTML in the conversation 
 2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment with KPI cards, amCharts charts, a severity filter, and "Explain ↗" buttons, and it already follows the host widget rules.
 3. Do not rebuild, restyle, or trim it. If it is missing or the tool fails, skip this step and say so in one line.
 
-Without such a tool, skip this step. The widget's buttons send messages as if the user typed them. Answer them from `findings.json` and the cited source; they do not lift the read-only rule. For the dashboard, open or attach `docs/code-review/dashboard.html` if the host can; otherwise give its path.
+Without such a tool, skip this step. The widget's buttons send messages as if the user typed them. Answer them from `findings.json` and the cited source; they do not lift the analysis-only rule: explain and plan, never edit. For the dashboard, open or attach `docs/code-review/dashboard.html` if the host can; otherwise give its path.
 
 ## Final message
 
