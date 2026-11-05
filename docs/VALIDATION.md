@@ -70,5 +70,5 @@ Each run prints pass/fail, recall, and severity totals, and leaves `evaluation.j
 
 ## Assumptions
 
-- The GitHub location `917ventures/917v-code-review` is a placeholder. Replace it in `plugin.json`, `README.md`, and `docs/DISTRIBUTION.md`.
+- The plugin is hosted at `github.com/jerwyn917/917v-code-review`. If it moves to an organization, update `plugin.json`, `README.md`, and `docs/DISTRIBUTION.md`.
 - Seeded-issue recall measures known defects only. It does not measure precision. Extra findings were spot-checked during the orchestrator's reasoning check, not exhaustively.

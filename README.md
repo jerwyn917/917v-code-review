@@ -151,11 +151,11 @@ See [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) for organization rollout, priva
 
 ```bash
 # once: make sure git can read the private repo (SSH key, or `gh auth login && gh auth setup-git`)
-claude plugin marketplace add 917ventures/917v-code-review
+claude plugin marketplace add jerwyn917/917v-code-review
 claude plugin install 917v-code-review@917ventures
 ```
 
-Or inside Claude Code: `/plugin marketplace add 917ventures/917v-code-review`, then `/plugin install 917v-code-review@917ventures`.
+Or inside Claude Code: `/plugin marketplace add jerwyn917/917v-code-review`, then `/plugin install 917v-code-review@917ventures`.
 
 Try it without installing:
 
@@ -214,3 +214,4 @@ Validation results are recorded in [docs/VALIDATION.md](docs/VALIDATION.md).
 - **The import graph** resolves relative imports and tsconfig path aliases (JS/TS), Python packages, Java/Kotlin packages, and Go module packages. Other languages rely on the architecture agent's own reading.
 - **Signals are regex hints.** They speed up the agents but are never reported without an agent confirming them in context.
 - **Agent recall is not 100%.** The bundled fixtures measure it; see docs/VALIDATION.md.
+- **Reports live outside the repository.** Tools scoped to the repository folder, such as an editor's file tree or the Claude app's file pane, don't show them. Open the folder path printed at the end of the run, or pass `--out <dir>` to put the reports somewhere you browse.

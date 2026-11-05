@@ -2,14 +2,14 @@
 
 This repository is both the **plugin** (`.claude-plugin/plugin.json`) and a one-plugin **marketplace** (`.claude-plugin/marketplace.json`, marketplace name `917ventures`, plugin source `"./"`). Host it as a **private GitHub repository**.
 
-> Assumption: the repository lives at `github.com/917ventures/917v-code-review`. If the org or repo name differs, replace `917ventures/917v-code-review` everywhere below. If 917Ventures already runs a central marketplace repository, use [Option B](#option-b-add-it-to-an-existing-org-marketplace) instead.
+> The repository lives at `github.com/jerwyn917/917v-code-review`. If it moves (for example to a 917ventures organization), replace `jerwyn917/917v-code-review` everywhere below, in `README.md`, and in `.claude-plugin/plugin.json`. If 917Ventures already runs a central marketplace repository, use [Option B](#option-b-add-it-to-an-existing-org-marketplace) instead.
 
 ## 1. Publish the repository (maintainers)
 
 ```bash
 cd 917v-code-review
 git init -b main && git add -A && git commit -m "917v-code-review v1.0.0"
-gh repo create 917ventures/917v-code-review --private --source . --push
+gh repo create jerwyn917/917v-code-review --private --source . --push
 claude plugin tag .            # creates the 917v-code-review--v1.0.0 release tag after validating manifests
 git push --tags
 ```
@@ -46,7 +46,7 @@ Deploy these keys through **server-managed settings** (claude.ai admin console),
 {
   "extraKnownMarketplaces": {
     "917ventures": {
-      "source": { "source": "github", "repo": "917ventures/917v-code-review" },
+      "source": { "source": "github", "repo": "jerwyn917/917v-code-review" },
       "autoUpdate": true
     }
   },
@@ -62,7 +62,7 @@ Deploy these keys through **server-managed settings** (claude.ai admin console),
 - To allow-list marketplaces org-wide, add `strictKnownMarketplaces`. The list must include every marketplace you still want to allow, because an empty list blocks all of them:
   ```json
   "strictKnownMarketplaces": [
-    { "source": "github", "repo": "917ventures/917v-code-review" },
+    { "source": "github", "repo": "jerwyn917/917v-code-review" },
     { "source": "skills-dir" }
   ]
   ```
@@ -82,7 +82,7 @@ Add an entry to the central marketplace's `.claude-plugin/marketplace.json`:
 ```json
 {
   "name": "917v-code-review",
-  "source": { "source": "github", "repo": "917ventures/917v-code-review", "ref": "917v-code-review--v1.0.0" },
+  "source": { "source": "github", "repo": "jerwyn917/917v-code-review", "ref": "917v-code-review--v1.0.0" },
   "description": "Standardized read-only code review with validated findings and reports in a folder outside the repository.",
   "category": "development"
 }
@@ -93,11 +93,11 @@ To pin an exact commit, add `"sha": "<full 40-character commit sha>"`. When both
 ## 4. Install and use (developers)
 
 ```bash
-claude plugin marketplace add 917ventures/917v-code-review
+claude plugin marketplace add jerwyn917/917v-code-review
 claude plugin install 917v-code-review@917ventures
 ```
 
-Or inside Claude Code: `/plugin marketplace add 917ventures/917v-code-review`, then `/plugin install 917v-code-review@917ventures`. Restart the session, or run `/reload-plugins`.
+Or inside Claude Code: `/plugin marketplace add jerwyn917/917v-code-review`, then `/plugin install 917v-code-review@917ventures`. Restart the session, or run `/reload-plugins`.
 
 Check the installation:
 
