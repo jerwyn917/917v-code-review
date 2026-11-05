@@ -163,6 +163,30 @@ class TestSignalsAndGraph(unittest.TestCase):
         rules = {s["rule"] for s in out["signals"]}
         self.assertTrue({"sql-string-building", "hardcoded-secret", "jwt-handling", "schema-auto-sync"} <= rules)
 
+    def test_quick_scan(self):
+        fixture = os.path.join(FIXTURES, "nestjs-orders-api")
+        with tempfile.TemporaryDirectory() as tmp:
+            run = lambda *a: subprocess.run([sys.executable, *a], check=True, capture_output=True, text=True).stdout
+            run(os.path.join(SCRIPTS, "detect-stack.py"), fixture, "-o", os.path.join(tmp, "stack.json"))
+            run(os.path.join(SCRIPTS, "scan-signals.py"), fixture, "-o", os.path.join(tmp, "signals.json"))
+            run(os.path.join(SCRIPTS, "import-graph.py"), fixture, "-o", os.path.join(tmp, "imports.json"))
+            out = os.path.join(tmp, "out")
+            summary = json.loads(run(os.path.join(SCRIPTS, "render-scan.py"), "--root", fixture,
+                                     "--stack", os.path.join(tmp, "stack.json"),
+                                     "--signals", os.path.join(tmp, "signals.json"),
+                                     "--imports", os.path.join(tmp, "imports.json"), "-o", out))
+            text = open(os.path.join(out, "scan.md"), encoding="utf-8").read()
+            self.assertEqual(os.listdir(out), ["scan.md"])
+        self.assertGreater(summary["leads"], 5)
+        self.assertEqual(summary["import_cycles"], 3)
+        self.assertIn("Security", summary["leads_by_area"])
+        self.assertIn("leads, not findings", text)
+        self.assertIn("[`src/users/users.service.ts:24`](../../src/users/users.service.ts#L24)", text)
+        self.assertIn("`` return this.dataSource.query(`SELECT", text)   # backticks in snippets kept verbatim
+        self.assertNotIn("Pr0d-Orders-DB-2024!", text)
+        self.assertNotIn("orders-jwt-signing-key-9f8e7d6c", text)
+        self.assertIn("/917v-code-review:review", text)
+
     def test_cycles(self):
         g = graph.Graph(os.path.join(FIXTURES, "nestjs-orders-api")).build()
         cycles = g.cycles()

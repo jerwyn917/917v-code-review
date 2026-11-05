@@ -18,6 +18,7 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 | `/917v-code-review:review-diff [--staged \| --branch <base> \| --range a..b]` | Review only changed code. Default: uncommitted changes, including untracked files |
 | `/917v-code-review:security [path]` | Security-focused review (OWASP Top 10, injection, XSS, authn/authz, secrets, config, infrastructure security) |
 | `/917v-code-review:architecture [path]` | Architecture and code quality (SOLID, DRY, layering, circular dependencies, modularity) |
+| `/917v-code-review:scan [path] [--staged \| --branch <base> \| --range a..b]` | Quick triage in seconds: stack, pattern-based risk leads, import cycles. No agents and no validation, so it reports leads, not findings. Writes `docs/code-review/scan.md` |
 
 Common options: `--agents a,b` (run only these agents), `--skip a,b`, `--no-html`.
 
@@ -32,6 +33,8 @@ You can also ask in plain words, for example "review this repo" or "do a securit
 /917v-code-review:review-diff --staged
 /917v-code-review:security
 /917v-code-review:architecture --no-html
+/917v-code-review:scan
+/917v-code-review:scan --branch main
 ```
 
 ## How a review runs
@@ -104,6 +107,7 @@ docs/code-review/
 ├── security-review.md       OWASP Top 10 table, security findings, areas checked
 ├── architecture-review.md   structure, dependency analysis (import cycles), architecture + code quality findings
 ├── recommendations.md       strategic themes, then Priority 1/2/3 actions
+├── scan.md                  quick-scan leads (only from /917v-code-review:scan)
 ├── dashboard.html           interactive dashboard: amCharts 5 analytics, cross-filtering findings list
 ├── findings.json            validated findings, for tooling/CI
 └── .work/                   scratch: stack, signals, raw agent output, integrity proof, chat-widget.html (git-ignored)
@@ -180,7 +184,7 @@ Differences from the plugin: there are no slash commands (the mode comes from yo
 ```
 .claude-plugin/plugin.json        plugin manifest (name, version)
 .claude-plugin/marketplace.json   this repo is also a one-plugin marketplace
-commands/                         the four slash commands (thin wrappers around the skill)
+commands/                         the slash commands (review, review-diff, security, architecture wrap the skill; scan runs the scripts only)
 skills/comprehensive-review/      orchestration skill + references (schema, rubric, ownership, checklists)
 agents/                           the eight specialist reviewers (Read/Grep/Glob only)
 scripts/                          deterministic helpers (stdlib Python)

@@ -27,6 +27,7 @@ Work out the mode and options from the user's words or the arguments passed to t
 | "review my changes / diff / branch / PR", `diff` | `diff` |
 | "security review", "OWASP", `security` | `security` |
 | "architecture review", "code quality", `architecture` | `architecture` |
+| "quick scan", "scan", "triage", `scan` | `scan`: follow **Quick scan mode** below instead of steps 1–10 |
 
 - `path`: directory to review. Default: the Git top level of the current directory (`git rev-parse --show-toplevel`), otherwise the current directory. If the user uploaded an archive, extract it into a new empty folder first and review that folder. Call the absolute path `ROOT`.
 - Diff selectors: `--staged`, `--branch <base>` (e.g. "against main"), `--range <a>..<b>`. No selector means uncommitted changes, including untracked files.
@@ -37,6 +38,21 @@ Set `OUT=<ROOT>/docs/code-review` and `WORK=$OUT/.work`. Shell variables do not 
 If `python3` is missing, tell the user. Continue in **manual mode**: do every step by reading files directly, write the reports by hand in the format of `$S/templates/`, and state in the executive summary that automated validation was unavailable.
 
 If `$OUT` already has reports from an earlier run, they will be replaced. Say so in your final message. They are this skill's own output, not project files.
+
+## Quick scan mode
+
+A fast triage with the deterministic scripts only: no reviewers, no validation, and **leads, not findings**. Set up `ROOT`, `OUT` and `WORK` as above, then:
+
+```bash
+python3 "$S/scripts/detect-stack.py" "$ROOT" -o "$WORK/stack.json" --files-out "$WORK/files.txt" --brief
+python3 "$S/scripts/diff-scope.py" "$ROOT" [--staged | --branch <base> | --range a..b] -o "$WORK/scope.json"   # only with a diff selector
+python3 "$S/scripts/scan-signals.py" "$ROOT" [--scope "$WORK/scope.json"] -o "$WORK/signals.json"
+python3 "$S/scripts/import-graph.py" "$ROOT" -o "$WORK/import-graph.json"
+python3 "$S/scripts/render-scan.py" --root "$ROOT" --stack "$WORK/stack.json" --signals "$WORK/signals.json" \
+  --imports "$WORK/import-graph.json" [--scope "$WORK/scope.json"] -o "$OUT"
+```
+
+Reply from the printed JSON summary: scope and stack in one line, leads by area, up to five notable leads as `file:line` plus hint (phrased as leads, never as confirmed issues), import cycles, a link to `docs/code-review/scan.md`, and the full review as the next step. Do not open source files to judge the leads.
 
 ## Step 1: Baseline (proves read-only)
 
