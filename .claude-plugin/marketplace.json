@@ -11,7 +11,7 @@
     {
       "name": "917v-code-review",
       "source": "./",
-      "description": "Standardized read-only code review: stack detection, specialized reviewer agents, validated findings, consolidated reports in docs/code-review/.",
+      "description": "Standardized read-only code review: stack detection, specialized reviewer agents, validated findings, consolidated reports in a folder outside the repository.",
       "category": "development",
       "tags": ["code-review", "security", "quality"]
     }
