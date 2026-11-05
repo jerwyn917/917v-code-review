@@ -140,6 +140,21 @@ claude --plugin-dir /path/to/917v-code-review
 
 **Requirements:** Claude Code, `git`, and `python3` 3.8 or newer (preinstalled on macOS and most Linux). Without Python, the skill falls back to a manual review and says so in the report.
 
+### As a standalone skill
+
+The same review also ships as a single self-contained Agent Skill, `917v-code-review`, for places where a plugin is not wanted or not supported (personal `~/.claude/skills/`, claude.ai, the Claude API). Build it from this repo:
+
+```bash
+python3 tools/build-skill.py
+```
+
+This writes `dist/917v-code-review/` (the skill folder) and `dist/917v-code-review.zip` (the same folder, zipped).
+
+- **Claude Code, every project:** copy `dist/917v-code-review` to `~/.claude/skills/`. **One project only:** copy it to `<project>/.claude/skills/`. Then ask "review this repo", or run `/917v-code-review` with `security`, `architecture`, or `diff --branch main`.
+- **claude.ai / Claude Desktop:** upload `dist/917v-code-review.zip` under Settings → Capabilities → Skills, then upload or attach the repository to review.
+
+Differences from the plugin: there are no slash commands (the mode comes from your words or the skill argument), and the eight agents become reviewer briefs in `references/reviewers/`. In Claude Code the orchestrator runs them in parallel as general-purpose subagents told to stay read-only; where subagents are unavailable (claude.ai), it runs them one after another itself. Scripts, templates, schema, rubric, and reports are identical.
+
 ## Development
 
 ```
@@ -150,8 +165,12 @@ skills/comprehensive-review/      orchestration skill + references (schema, rubr
 agents/                           the eight specialist reviewers (Read/Grep/Glob only)
 scripts/                          deterministic helpers (stdlib Python)
 templates/                        report templates + dashboard
+skill-src/SKILL.md                orchestrator for the standalone skill build
+tools/build-skill.py              packages the standalone skill into dist/ (git-ignored)
 tests/                            unit tests, fixtures, expected seeded issues, e2e runner, evaluator
 ```
+
+When you change `skills/comprehensive-review/SKILL.md`, mirror the change in `skill-src/SKILL.md`. Agents, references, scripts, and templates are copied by the build, so they need no second edit.
 
 ```bash
 python3 -m unittest discover -s tests -v                # script unit tests (offline, fast)

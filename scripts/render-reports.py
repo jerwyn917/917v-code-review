@@ -49,6 +49,11 @@ def plugin_version():
     try:
         return load_json(os.path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json")).get("version", "?")
     except (OSError, ValueError):
+        pass
+    try:  # standalone skill layout (tools/build-skill.py writes VERSION)
+        with open(os.path.join(PLUGIN_ROOT, "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "?"
+    except OSError:
         return "?"
 
 

@@ -2,6 +2,13 @@
 
 All notable changes to this plugin are documented here. Versions follow [Semantic Versioning](https://semver.org/). The version in `.claude-plugin/plugin.json` is the source of truth.
 
+## [Unreleased]
+
+### Added
+- Standalone Agent Skill build: `tools/build-skill.py` packages the review as `dist/917v-code-review/` and `dist/917v-code-review.zip` for `~/.claude/skills/`, claude.ai, or the API. Orchestrator in `skill-src/SKILL.md`; agents become reviewer briefs in `references/reviewers/`, run as read-only general-purpose subagents or sequentially where subagents are unavailable.
+- `render-reports.py` reads the version from a `VERSION` file when `.claude-plugin/plugin.json` is absent (skill layout).
+- `tests/test_build_skill.py`.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added
