@@ -16,4 +16,4 @@ Diff selectors:
 - `--branch <base>`: everything on the current branch since it diverged from `<base>`, e.g. `--branch main`. This is what a pull request contains.
 - `--range <a>..<b>`: an explicit commit range.
 
-The review is **analysis only**: it never edits project files, never applies fixes, and never stages, commits, stashes, or checks out anything. Its only output is new files in `docs/code-review/`.
+The review is **analysis only**: it never edits project files, never applies fixes, and never stages, commits, stashes, or checks out anything. Reports go to a folder outside the repository.

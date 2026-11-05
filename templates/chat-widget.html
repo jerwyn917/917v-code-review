@@ -131,7 +131,7 @@
   }
   $("v917cr-more").addEventListener("click", () => { STATE.all = !STATE.all; renderList(); });
   $("v917cr-plan").addEventListener("click", () => ask("Make a prioritized fix plan for the " + crit + " Critical and High findings from the code review of " + DATA.repo + ", grouped by root cause, without changing any files yet"));
-  $("v917cr-dash").addEventListener("click", () => ask("Open the full code review dashboard for " + DATA.repo + " (docs/code-review/dashboard.html)"));
+  $("v917cr-dash").addEventListener("click", () => ask("Open the full code review dashboard for " + DATA.repo));
 
   function fallback() {
     $("v917cr-sev").style.height = "0"; $("v917cr-cat").style.height = "auto";

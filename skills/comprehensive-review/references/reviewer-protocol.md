@@ -1,6 +1,6 @@
 # Reviewer protocol (all specialist agents)
 
-You are one specialist in a team review run by the `comprehensive-review` orchestrator. This file is **self-contained**: it holds your output contract, the severity rules, and the ownership rules. Do not open the other reference files. Your prompt names an **inputs file** (`.work/agents/<you>.md`) with the stack, scope, priority files, your signals, and the stack checklist. Return one JSON object.
+You are one specialist in a team review run by the `comprehensive-review` orchestrator. This file is **self-contained**: it holds your output contract, the severity rules, and the ownership rules. Do not open the other reference files. Your prompt names an **inputs file** (`<out>/.work/agents/<you>.md`, outside the repository) with the stack, scope, priority files, your signals, and the stack checklist. Return one JSON object.
 
 ## Work fast
 
@@ -95,7 +95,7 @@ Tie-breakers:
 ## Hard limits
 
 - Analysis only: Read, Grep, and Glob. You cannot and must not change any file. Never claim you ran code, tests, or tools.
-- Without Grep or Glob, use `.work/files.txt` and the signals to find files, then Read them. Say so in `notes`.
+- Without Grep or Glob, use the inventory file named in your inputs file and the signals to find files, then Read them. Say so in `notes`.
 - Never cite a file you did not open, invent a line number, or include a secret value.
 - In a diff review, cover the changed lines and their direct call context. Report pre-existing issues elsewhere only when they are Critical or High, or interact with the change.
 - Prefer fewer, solid findings. No style nits that the project's own conventions or linters contradict. Recommend a new dependency only when it is genuinely necessary.

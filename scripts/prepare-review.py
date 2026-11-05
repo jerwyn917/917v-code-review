@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Prepare a review (or run a quick scan) in ONE call, so the orchestrator saves round trips.
 
-Does, in-process and read-only (writes only to <root>/docs/code-review/):
-  1. creates docs/code-review/.work/ (+ a .gitignore of "*")
+Does, in-process and read-only. Nothing is written inside the repository: output goes
+to a folder OUTSIDE it (default ~/.917v-code-review/reviews/<repo>-<id>/, or --out,
+or $CODE_REVIEW_OUT_DIR as the base folder), printed as "out" in the summary.
+  1. claims the output folder (ownership marker) and creates <out>/.work/
   2. integrity snapshot        -> .work/baseline.json         (not for --mode scan)
   3. stack detection           -> .work/stack.json, files.txt
   4. diff scope (selectors)    -> .work/scope.json
@@ -10,11 +12,11 @@ Does, in-process and read-only (writes only to <root>/docs/code-review/):
   6. import graph              -> .work/import-graph.json     (full, architecture, scan)
   7. one input file per agent  -> .work/agents/<agent>.md     (stack digest, scope, priority files,
                                   this agent's signals, import cycles, matching stack checklists)
-  --mode scan instead renders docs/code-review/scan.md and stops there (no agents).
+  --mode scan instead renders <out>/scan.md and stops there (no agents).
 
 Prints the stack digest and a JSON summary on stdout. Exit code 3 = nothing to review (empty diff).
 
-Usage: prepare-review.py <root> [--mode full|diff|security|architecture|scan]
+Usage: prepare-review.py <root> [--mode full|diff|security|architecture|scan] [--out DIR]
                          [--staged | --branch BASE | --range A..B]
 """
 
@@ -27,7 +29,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from _common import OUTPUT_DIR, claim_output_dir, dump_json  # noqa: E402
+from _common import claim_output_dir, dump_json  # noqa: E402
 
 PLUGIN_ROOT = os.path.dirname(HERE)
 
@@ -120,7 +122,7 @@ def priority_files(agent, stack, files, graph, scope):
     return out[:MAX_PRIORITY]
 
 
-def agent_input(agent, mode, root, stack, digest, files, signals, graph, scope, checklists):
+def agent_input(agent, mode, root, work, stack, digest, files, signals, graph, scope, checklists):
     sigs = [s for s in signals.get("signals", []) if s.get("agent") == agent]
     lines = ["# Inputs for %s" % agent, "",
              "Prepared by scripts/prepare-review.py. ROOT: `%s` · MODE: %s" % (root, mode), "",
@@ -131,7 +133,7 @@ def agent_input(agent, mode, root, stack, digest, files, signals, graph, scope, 
         lines += ["- `%s` lines %s" % (f["file"], ", ".join("%d-%d" % tuple(r) for r in f.get("ranges", [])) or
                                        f.get("status", "changed")) for f in scope["files"][:80]]
     else:
-        lines.append("Whole repository (%d reviewable files; inventory in `.work/files.txt`)." % len(files))
+        lines.append("Whole repository (%d reviewable files; inventory in `%s`)." % (len(files), os.path.join(work, "files.txt")))
     lines += ["", "## Priority files", ""]
     lines += ["- `%s`" % p for p in priority_files(agent, stack, files, graph, scope)] or ["- (none detected)"]
     lines += ["", "## Signals for you (unverified leads: open each and decide)", ""]
@@ -140,7 +142,7 @@ def agent_input(agent, mode, root, stack, digest, files, signals, graph, scope, 
                                               code_span((s.get("snippet") or "").strip()[:140]))
                   for s in sigs[:MAX_SIGNALS]]
         if len(sigs) > MAX_SIGNALS:
-            lines.append("- … %d more in `.work/signals.json` (filter by agent)" % (len(sigs) - MAX_SIGNALS))
+            lines.append("- … %d more in `%s` (filter by agent)" % (len(sigs) - MAX_SIGNALS, os.path.join(work, "signals.json")))
     else:
         lines.append("- none")
     if agent == "architecture-reviewer" and graph is not None:
@@ -167,6 +169,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("root")
     ap.add_argument("--mode", default="full", choices=["full", "diff", "security", "architecture", "scan"])
+    ap.add_argument("--out", help="report folder outside the repository (default: ~/.917v-code-review/reviews/<repo>-<id>)")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--staged", action="store_true")
     g.add_argument("--branch", metavar="BASE")
@@ -174,11 +177,9 @@ def main():
     a = ap.parse_args()
 
     root = os.path.abspath(a.root)
-    out = claim_output_dir(root)   # never writes into a docs/code-review/ the project owns
+    out = claim_output_dir(root, a.out)   # outside the repository; never a folder the user owns
     work = os.path.join(out, ".work")
     os.makedirs(os.path.join(work, "raw"), exist_ok=True)
-    with open(os.path.join(work, ".gitignore"), "w", encoding="utf-8") as fh:
-        fh.write("*\n")
 
     scope = None
     selector = a.staged or a.branch or a.range
@@ -193,7 +194,7 @@ def main():
             scope = diff_scope.compute(root, "uncommitted")
         write_json(os.path.join(work, "scope.json"), scope)
         if not scope["files"]:
-            dump_json({"nothing_to_review": True, "scope": scope["description"],
+            dump_json({"nothing_to_review": True, "out": out, "scope": scope["description"],
                        "hint": "no changed files for this selector; try --staged, --branch <base> or --range a..b"})
             return 3
 
@@ -214,7 +215,7 @@ def main():
         graph = import_graph.analyze(root)
         write_json(os.path.join(work, "import-graph.json"), graph)
 
-    summary = {"root": root, "mode": a.mode, "work": work,
+    summary = {"root": root, "mode": a.mode, "out": out, "work": work,
                "scope": scope["description"] if scope else "whole repository",
                "files": len(files), "signals": len(signals.get("signals", [])),
                "signals_by_agent": signals.get("by_agent", {}),
@@ -237,7 +238,7 @@ def main():
     os.makedirs(agents_dir, exist_ok=True)
     for agent in ALL_AGENTS:
         with open(os.path.join(agents_dir, agent + ".md"), "w", encoding="utf-8") as fh:
-            fh.write(agent_input(agent, a.mode, root, stack, digest, files, signals, graph, scope, checklists))
+            fh.write(agent_input(agent, a.mode, root, work, stack, digest, files, signals, graph, scope, checklists))
     summary["agent_inputs"] = os.path.join(agents_dir, "<agent>.md")
     summary["checklist_sections"] = [c.splitlines()[0][3:] for c in checklists]
     print(digest)

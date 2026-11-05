@@ -83,7 +83,7 @@ Add an entry to the central marketplace's `.claude-plugin/marketplace.json`:
 {
   "name": "917v-code-review",
   "source": { "source": "github", "repo": "917ventures/917v-code-review", "ref": "917v-code-review--v1.0.0" },
-  "description": "Standardized read-only code review with validated findings and reports in docs/code-review/.",
+  "description": "Standardized read-only code review with validated findings and reports in a folder outside the repository.",
   "category": "development"
 }
 ```
@@ -138,5 +138,5 @@ The plugin runs inside each developer's Claude Code session under the organizati
 - No network calls from the scripts. They are offline and stdlib-only.
 - The dashboard, and the in-chat widget where the host renders one, load amCharts 5 from `cdnjs.cloudflare.com` and fonts from Google Fonts when opened. They send no review data: findings are inlined in the page. Offline they fall back to built-in HTML charts.
 - No MCP servers and no hooks.
-- Never modifies the reviewed code. It writes only new files in `docs/code-review/`, claimed with a `.917v-code-review` marker, and refuses to write if the project already has its own folder there. The scripts reject any other output path and allow only read-only Git subcommands, run with `GIT_OPTIONAL_LOCKS=0` so `git status` and `git diff` do not rewrite `.git/index`. An integrity hash of every file before and after proves it.
+- Never modifies the reviewed repository and writes nothing inside it. Reports go to `~/.917v-code-review/reviews/<repo>-<id>/` (or `--out` / `CODE_REVIEW_OUT_DIR`), claimed with a `.917v-code-review` marker, and a folder it did not create is never overwritten. The scripts reject any output path inside the repository and allow only read-only Git subcommands, run with `GIT_OPTIONAL_LOCKS=0` so `git status` and `git diff` do not rewrite `.git/index`. An integrity hash of every repository file before and after proves it.
 - Online dependency audits only when the developer explicitly authorizes them in the conversation.

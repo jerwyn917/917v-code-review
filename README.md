@@ -6,9 +6,9 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 - **Automatic stack detection** from manifests *and* source usage. A folder name alone never counts as evidence.
 - **Eight specialist agents**: architecture, security, performance, backend, frontend, database, testing, devops. They are selected by the detected stack and have non-overlapping responsibilities.
 - **Validation of every finding against the source**. The file must exist, the line must exist, and the evidence must appear in the file. Wrong line numbers are corrected, unverifiable claims are rejected, duplicates are merged, and secrets are redacted.
-- **Consolidated reports** in `docs/code-review/`: executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, and `findings.json`.
+- **Consolidated reports** in a folder **outside your repository** (`~/.917v-code-review/reviews/<repo>-<id>/` by default): executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, and `findings.json`.
 - **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, and "Explain ↗" buttons that send follow-up questions back to Claude.
-- **Analysis only, never modifies your code.** It never edits, formats, or deletes project files, and never applies fixes. The only output is new files in `docs/code-review/`, claimed with a `.917v-code-review` marker; if your project already has its own folder with that name, the review stops without writing. The scripts refuse any other output path and run only read-only Git commands, without rewriting `.git/index`. Every file is hashed before and after, and the report states whether anything outside `docs/code-review/` changed.
+- **Analysis only, never touches your repository.** It never edits, formats, or deletes project files, never applies fixes, and writes nothing inside the repository. Reports go to a folder outside it, claimed with a `.917v-code-review` marker, and a folder you own is never overwritten. The scripts refuse any output path inside the repository and run only read-only Git commands, without rewriting `.git/index`. Every file is hashed before and after, and the report states whether anything changed.
 
 ## Commands
 
@@ -18,7 +18,7 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 | `/917v-code-review:review-diff [--staged \| --branch <base> \| --range a..b]` | Review only changed code. Default: uncommitted changes, including untracked files |
 | `/917v-code-review:security [path]` | Security-focused review (OWASP Top 10, injection, XSS, authn/authz, secrets, config, infrastructure security) |
 | `/917v-code-review:architecture [path]` | Architecture and code quality (SOLID, DRY, layering, circular dependencies, modularity) |
-| `/917v-code-review:scan [path] [--staged \| --branch <base> \| --range a..b]` | Quick triage in seconds: stack, pattern-based risk leads, import cycles. No agents and no validation, so it reports leads, not findings. Writes `docs/code-review/scan.md` |
+| `/917v-code-review:scan [path] [--staged \| --branch <base> \| --range a..b]` | Quick triage in seconds: stack, pattern-based risk leads, import cycles. No agents and no validation, so it reports leads, not findings. Writes `scan.md` outside the repository |
 
 Common options: `--agents a,b` (run only these agents), `--skip a,b`, `--no-html`.
 
@@ -101,7 +101,8 @@ See [`severity-rubric.md`](skills/comprehensive-review/references/severity-rubri
 ## Output
 
 ```
-docs/code-review/
+~/.917v-code-review/reviews/<repo>-<id>/      (outside the repository; --out <dir> to choose)
+├── .917v-code-review        ownership marker
 ├── executive-summary.md     summary, health score, counts by severity/category, critical risks, top recommendations
 ├── detailed-findings.md     every finding with all fields (diff mode: grouped by changed lines / context)
 ├── security-review.md       OWASP Top 10 table, security findings, areas checked
@@ -110,10 +111,10 @@ docs/code-review/
 ├── scan.md                  quick-scan leads (only from /917v-code-review:scan)
 ├── dashboard.html           interactive dashboard: amCharts 5 analytics, cross-filtering findings list
 ├── findings.json            validated findings, for tooling/CI
-└── .work/                   scratch: stack, signals, raw agent output, integrity proof, chat-widget.html (git-ignored)
+└── .work/                   scratch: stack, signals, agent inputs, raw agent output, integrity proof, chat-widget.html
 ```
 
-`docs/code-review/` is the only place the plugin writes. Commit it, or add it to `.gitignore`; the plugin never decides for you. Each run replaces the previous reports.
+Nothing is written inside the reviewed repository, so `git status` stays clean. `<id>` is derived from the repository's path, so each repository keeps its own folder, and each run replaces that folder's previous reports. Override the location with `--out <dir>` (any folder outside the repository) or the `CODE_REVIEW_OUT_DIR` environment variable, which sets the base folder. Source links in the reports are relative paths back to the repository, so they work on the machine that ran the review.
 
 ### Dashboard analytics
 

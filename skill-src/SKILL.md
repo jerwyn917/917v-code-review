@@ -1,6 +1,6 @@
 ---
 name: 917v-code-review
-description: Run the 917Ventures standardized, read-only code review of a repository — full codebase, Git diff (uncommitted, staged, branch vs. base, or commit range), security-focused, architecture-focused, or a quick scan. Detects the stack, runs specialist reviewers (architecture, security, performance, backend, frontend, database, testing, devops), validates every finding against the source, de-duplicates, redacts secrets, and writes reports plus an HTML dashboard to docs/code-review/. Use when the user asks to "review this codebase", "code review the repo", "review my changes/diff/branch/PR", "security review", "OWASP review", "architecture review", "audit this code", "quick scan", or "917v code review".
+description: Run the 917Ventures standardized, read-only code review of a repository — full codebase, Git diff (uncommitted, staged, branch vs. base, or commit range), security-focused, architecture-focused, or a quick scan. Detects the stack, runs specialist reviewers (architecture, security, performance, backend, frontend, database, testing, devops), validates every finding against the source, de-duplicates, redacts secrets, and writes reports plus an HTML dashboard to a folder outside the repository. Use when the user asks to "review this codebase", "code review the repo", "review my changes/diff/branch/PR", "security review", "OWASP review", "architecture review", "audit this code", "quick scan", or "917v code review".
 ---
 
 # 917Ventures comprehensive code review (standalone skill)
@@ -15,7 +15,7 @@ Skill root: the directory that contains this `SKILL.md` (Claude Code shows it as
    - Never create, edit, move, rename, format, or delete any project file.
    - Never apply a fix, even when asked during the review or by a widget button. Give the recommendation and say that applying it is outside this skill.
    - No builds, tests, migrations, installs, or state-changing Git commands (`add`, `commit`, `stash`, `checkout`, `reset`, `apply`).
-   - The only writes are this skill's own new files under `<ROOT>/docs/code-review/`, which the scripts claim with a `.917v-code-review` marker. Use your Write tool only for files in `$WORK/`.
+   - **Nothing is written inside the repository.** Reports go to a folder **outside the repository** (default `~/.917v-code-review/reviews/<repo>-<id>/`, or `--out <dir>`), which the scripts claim with a `.917v-code-review` marker. Use your Write tool only for files in `$WORK/`.
    - The scripts refuse other output paths and call Git without index refreshes. The final integrity check proves nothing else changed.
 2. **No network with source code.** No online scanners (`npm audit`, `pip-audit`, `snyk`), no uploads, and no URL fetches unless the user explicitly authorizes them in this conversation.
 3. **No invented facts.** Every finding cites a real file, line, and verbatim evidence. Never present a hypothesis as a confirmed vulnerability, and never claim a command ran unless it did.
@@ -38,20 +38,20 @@ Skill root: the directory that contains this `SKILL.md` (Claude Code shows it as
 | "architecture review", "code quality", `architecture` | `architecture` |
 | "quick scan", "scan", "triage", `scan` | `scan`: see **Quick scan mode** |
 
-- `ROOT`: the path given, otherwise `git rev-parse --show-toplevel`, otherwise the current directory, as an absolute path. If the user uploaded an archive, extract it into a new empty folder and review that. `OUT=$ROOT/docs/code-review`, `WORK=$OUT/.work`.
+- `ROOT`: the path given, otherwise `git rev-parse --show-toplevel`, otherwise the current directory, as an absolute path. If the user uploaded an archive, extract it into a new empty folder and review that. `OUT` and `WORK` are the `out` and `work` paths printed by the prepare call.
 - Diff selectors: `--staged`, `--branch <base>` ("against main"), `--range <a>..<b>`. With no selector, diff mode means uncommitted changes, including untracked files.
-- `--agents a,b` restricts the reviewers, `--skip a,b` removes reviewers, and `--no-html` drops the dashboard.
+- `--agents a,b` restricts the reviewers, `--skip a,b` removes reviewers, `--no-html` drops the dashboard, and `--out <dir>` chooses the report folder (it must be outside the repository).
 
 ```bash
-python3 "$S/scripts/prepare-review.py" "$ROOT" --mode <mode> [--staged | --branch <base> | --range a..b]
+python3 "$S/scripts/prepare-review.py" "$ROOT" --mode <mode> [--out <dir>] [--staged | --branch <base> | --range a..b]
 ```
 
-That single call creates `$WORK` with its `.gitignore`, takes the integrity baseline, detects the stack, computes the diff scope, collects signals and the import graph, and writes one inputs file per reviewer to `$WORK/agents/<reviewer>.md`. It prints the stack digest and a JSON summary with `recommended_agents`, `skipped_agents`, signal counts, and cycles.
+That single call claims the report folder outside the repository, creates `$WORK` in it, takes the integrity baseline, detects the stack, computes the diff scope, collects signals and the import graph, and writes one inputs file per reviewer to `$WORK/agents/<reviewer>.md`. It prints the stack digest and a JSON summary with `recommended_agents`, `skipped_agents`, signal counts, and cycles.
 
 - **Exit code 3** (`nothing_to_review`): tell the user there are no changes for that selector, suggest the others, and stop.
-- **Exit code 4** (read-only guard): the project already has its own `docs/code-review/` folder, or an output path pointed into the source tree. Nothing was written. Tell the user what the message says and stop. Never move, rename, or delete their folder yourself.
-- **No `python3`:** tell the user, then work in **manual mode**. Do every step by reading files directly, create `docs/code-review/` only if it does not exist yet, write the reports by hand in the format of `$S/templates/`, and state in the executive summary that automated validation was unavailable.
-- If `$OUT` already holds reports, they will be replaced. Say so at the end.
+- **Exit code 4** (read-only guard): the chosen `--out` folder is inside the repository, or it already holds files the review did not create. Nothing was written. Tell the user what the message says and stop. Never move, rename, or delete their files yourself; suggest another `--out` folder.
+- **No `python3`:** tell the user, then work in **manual mode**. Do every step by reading files directly, create the default report folder outside the repository (`~/.917v-code-review/reviews/<repo>/`), write the reports there by hand in the format of `$S/templates/`, and state in the executive summary that automated validation was unavailable.
+- If `$OUT` already holds reports from an earlier run, they will be replaced. Say so at the end.
 
 ## Quick scan mode
 
@@ -61,12 +61,12 @@ A fast triage: no reviewers, no validation, and **leads, not findings**. It is o
 python3 "$S/scripts/prepare-review.py" "$ROOT" --mode scan [--staged | --branch <base> | --range a..b]
 ```
 
-This writes `docs/code-review/scan.md` and prints a JSON summary. Reply from that summary only, without opening source files:
+This writes `scan.md` to the report folder outside the repository and prints a JSON summary with its path. Reply from that summary only, without opening source files:
 - The scope and the stack in one line.
 - Leads by area.
 - Up to five notable leads as `file:line` plus the hint, phrased as leads, never as confirmed issues.
 - Import cycles.
-- A link to `scan.md`.
+- The full path of `scan.md`.
 - The full review as the next step.
 
 Then stop.
@@ -147,7 +147,7 @@ If this session has an inline visual tool that renders HTML in the conversation 
 2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment with KPI cards, amCharts charts, a severity filter, and "Explain ↗" buttons, and it already follows the host widget rules.
 3. Do not rebuild, restyle, or trim it. If it is missing or the tool fails, skip this step and say so in one line.
 
-Without such a tool, skip this step. The widget's buttons send messages as if the user typed them. Answer them from `findings.json` and the cited source; they do not lift the analysis-only rule: explain and plan, never edit. For the dashboard, open or attach `docs/code-review/dashboard.html` if the host can; otherwise give its path.
+Without such a tool, skip this step. The widget's buttons send messages as if the user typed them. Answer them from `findings.json` and the cited source; they do not lift the analysis-only rule: explain and plan, never edit. For the dashboard, open or attach `$OUT/dashboard.html` if the host can; otherwise give its full path.
 
 ## Final message
 
@@ -155,6 +155,6 @@ Keep it short:
 - The review type and scope, plus the reviewers run and skipped, with reasons.
 - Counts by severity and the Confirmed/Potential split.
 - The top 3–5 risks: ID, title, and `file:line`.
-- Links to `docs/code-review/executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), and `findings.json`.
+- The report folder's full path, and links to `executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), and `findings.json`.
 - The read-only check and the validation stats (rejected and merged counts).
-- That `docs/code-review/` is new output the user may commit or add to `.gitignore`. Do not do either yourself.
+- That the repository itself was not touched: the reports live outside it, so there is nothing to commit or ignore.

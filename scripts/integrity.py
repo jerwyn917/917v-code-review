@@ -4,9 +4,9 @@
   integrity.py snapshot <repo-root> -o baseline.json
   integrity.py verify   <repo-root> baseline.json
 
-The snapshot hashes every reviewable file (honouring .gitignore) except the
-review's own output folder (docs/code-review/). `verify` exits 1 and lists
-the paths if anything outside that folder was added, changed or deleted.
+The snapshot hashes every file of the repository (honouring .gitignore). Reports
+are written outside the repository, so nothing is excluded: `verify` exits 1 and
+lists the paths if any file was added, changed or deleted, or HEAD moved.
 """
 
 import argparse
@@ -16,7 +16,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import OUTPUT_DIR, check_output_path, dump_json, git, is_git_repo, iter_repo_files, load_json  # noqa: E402
+from _common import check_output_path, dump_json, git, is_git_repo, iter_repo_files, load_json  # noqa: E402
 
 
 def _sha(path):
@@ -29,7 +29,7 @@ def _sha(path):
 
 def snapshot(root):
     root = os.path.abspath(root)
-    hashes = {rel: _sha(os.path.join(root, rel)) for rel in iter_repo_files(root, exclude_prefixes=(OUTPUT_DIR,))}
+    hashes = {rel: _sha(os.path.join(root, rel)) for rel in iter_repo_files(root, exclude_prefixes=())}
     head = None
     if is_git_repo(root):
         try:
@@ -40,7 +40,7 @@ def snapshot(root):
         "root": root,
         "taken_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "git_head": head,
-        "excluded": OUTPUT_DIR.replace(os.sep, "/") + "/",
+        "excluded": None,
         "file_count": len(hashes),
         "files": hashes,
     }

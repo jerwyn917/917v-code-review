@@ -60,10 +60,11 @@ class BuildSkillTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = os.path.join(tmp, "repo")
             shutil.copytree(os.path.join(REPO, "tests", "fixtures", "nestjs-orders-api"), repo)
-            p = subprocess.run([sys.executable, os.path.join(self.dst, "scripts", "prepare-review.py"), repo],
-                               capture_output=True, text=True, check=True)
+            out = os.path.join(tmp, "out")
+            p = subprocess.run([sys.executable, os.path.join(self.dst, "scripts", "prepare-review.py"), repo,
+                                "--out", out], capture_output=True, text=True, check=True)
             self.assertIn('"NestJS"', p.stdout)
-            brief = open(os.path.join(repo, "docs", "code-review", ".work", "agents", "security-reviewer.md"),
+            brief = open(os.path.join(out, ".work", "agents", "security-reviewer.md"),
                          encoding="utf-8").read()
             self.assertIn("## NestJS", brief)
 

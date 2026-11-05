@@ -5,10 +5,10 @@ Checks (hard failures make the exit code 1):
   * all required report files exist
   * every finding has the required fields, a valid severity, a unique ID
   * every finding's file/line/evidence is re-verified against the source
-  * no seeded secret value appears anywhere under docs/code-review/
+  * no seeded secret value appears anywhere in the report folder
   * no duplicate findings remain (same place, similar title)
   * severity rules hold (Critical => Confirmed; Low confidence => <= Medium)
-  * the reviewed copy is byte-identical to the original fixture (outside docs/code-review/)
+  * the reviewed copy is byte-identical to the original fixture (nothing excluded: reports live outside it)
 Metric (reported, gated only with --min-recall):
   * recall of the seeded issues listed in tests/expected/<fixture>.json
 
@@ -25,7 +25,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.join(os.path.dirname(HERE), "scripts")
 sys.path.insert(0, SCRIPTS)
-from _common import OUTPUT_DIR, SEVERITIES, SEVERITY_RANK, iter_repo_files  # noqa: E402
+from _common import SEVERITIES, SEVERITY_RANK, default_output_dir, iter_repo_files  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("validate_findings", os.path.join(SCRIPTS, "validate-findings.py"))
 vf = importlib.util.module_from_spec(spec)
@@ -75,13 +75,14 @@ def matches(seed, findings, repo):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--repo", required=True)
+    ap.add_argument("--out", help="report folder (default: the review's default folder outside the repo)")
     ap.add_argument("--expected", required=True)
     ap.add_argument("--original")
     ap.add_argument("--min-recall", type=float, default=0.0)
     ap.add_argument("--diff", action="store_true", help="diff review: skip recall, check in_changed_lines flags")
     a = ap.parse_args()
     repo = os.path.abspath(a.repo)
-    out_dir = os.path.join(repo, OUTPUT_DIR)
+    out_dir = os.path.abspath(a.out) if a.out else default_output_dir(repo)
     exp = json.load(open(a.expected))
     failures, result = [], {"fixture": exp["fixture"], "repo": repo}
 
@@ -144,8 +145,8 @@ def main():
 
     if a.original:
         orig = os.path.abspath(a.original)
-        before = {r: sha(os.path.join(orig, r)) for r in iter_repo_files(orig)}
-        after = {r: sha(os.path.join(repo, r)) for r in iter_repo_files(repo)}
+        before = {r: sha(os.path.join(orig, r)) for r in iter_repo_files(orig, exclude_prefixes=())}
+        after = {r: sha(os.path.join(repo, r)) for r in iter_repo_files(repo, exclude_prefixes=())}   # nothing excluded
         changed = sorted(set(before) ^ set(after)) + sorted(r for r in set(before) & set(after) if before[r] != after[r])
         result["modified_outside_output"] = changed
         if changed:

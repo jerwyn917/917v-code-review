@@ -5,9 +5,10 @@ with respect to the reviewed repository:
 - source files are only read; no script edits, formats, moves, or deletes them;
 - Git is called only with read-only subcommands, and with GIT_OPTIONAL_LOCKS=0 so
   `git status`/`git diff` do not rewrite .git/index;
-- output goes only to <root>/docs/code-review/ (claimed with an ownership marker,
-  never a folder of the project's own) or to a path outside the repository
-  (`check_output_path`).
+- output never goes inside the repository: reports live in a folder OUTSIDE it,
+  by default ~/.917v-code-review/reviews/<repo>-<id>/ (`default_output_dir`),
+  claimed with an ownership marker so a folder the user owns is never overwritten
+  (`claim_output_dir`), and every write path is checked (`check_output_path`).
 """
 
 import json
@@ -45,8 +46,11 @@ AGENTS = [
     "devops-reviewer",
 ]
 
+# Where earlier versions wrote reports inside the repository. Only used to skip such
+# leftovers when reading the code; nothing is ever written there any more.
 OUTPUT_DIR = os.path.join("docs", "code-review")
-MARKER = ".917v-code-review"   # ownership marker inside OUTPUT_DIR
+OUT_ENV = "CODE_REVIEW_OUT_DIR"   # base folder for reports (default ~/.917v-code-review/reviews)
+MARKER = ".917v-code-review"   # ownership marker inside the output folder
 OWN_OUTPUTS = {MARKER, ".work", "executive-summary.md", "detailed-findings.md", "security-review.md",
                "architecture-review.md", "recommendations.md", "dashboard.html", "findings.json", "scan.md"}
 READ_ONLY_GIT = {"rev-parse", "ls-files", "diff", "merge-base", "status", "log", "show", "cat-file"}
@@ -291,37 +295,46 @@ def _inside(path, folder):
     return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
 
 
+def default_output_dir(root):
+    """Report folder for <root>, outside the repository: <base>/<repo-name>-<8-hex id of the path>."""
+    import hashlib
+    root = os.path.realpath(root)
+    base = os.environ.get(OUT_ENV) or os.path.join(os.path.expanduser("~"), ".917v-code-review", "reviews")
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.basename(root) or "repo")
+    return os.path.join(os.path.abspath(base), "%s-%s" % (name, hashlib.sha1(root.encode("utf-8")).hexdigest()[:8]))
+
+
 def check_output_path(root, path):
-    """Allow writes only under <root>/docs/code-review/ or outside the repository entirely."""
+    """Refuse any write inside the reviewed repository. Output lives outside it."""
     if path in (None, "-"):
         return path
-    if _inside(path, os.path.join(root, OUTPUT_DIR)) or not _inside(path, root):
-        return path
-    raise ReadOnlyViolation("%s is inside the reviewed repository but outside %s/; the review never writes "
-                            "there" % (path, OUTPUT_DIR))
+    if _inside(path, root):
+        raise ReadOnlyViolation("%s is inside the reviewed repository; the review never writes there. Reports go "
+                                "to a folder outside it (default %s, or --out / %s)."
+                                % (path, default_output_dir(root), OUT_ENV))
+    return path
 
 
-def claim_output_dir(root):
-    """Make sure <root>/docs/code-review/ is ours before writing to it, and mark it.
+def claim_output_dir(root, out=None):
+    """Create (or reuse) the report folder outside the repository and mark it as ours.
 
-    The folder may be new, already carry our marker, or hold only file names this
-    tool produces (a run from before the marker existed). Anything else is the
-    project's own content and is never overwritten.
+    The folder may be new, already carry our marker, or hold only file names this tool
+    produces. Anything else belongs to the user and is never overwritten.
     """
-    out = os.path.join(os.path.abspath(root), OUTPUT_DIR)
+    out = os.path.abspath(out or default_output_dir(root))
+    check_output_path(root, out)
     if os.path.isdir(out) and not os.path.exists(os.path.join(out, MARKER)):
         foreign = sorted(set(os.listdir(out)) - OWN_OUTPUTS)
         if foreign:
             raise ReadOnlyViolation(
-                "%s already exists and contains files this review did not create (%s). It belongs to the "
-                "project, so nothing was written. Move it, or review a copy of the repository."
-                % (out, ", ".join(foreign[:5])))
+                "%s already exists and contains files this review did not create (%s). Nothing was written. "
+                "Choose another --out folder." % (out, ", ".join(foreign[:5])))
     elif os.path.exists(out) and not os.path.isdir(out):
         raise ReadOnlyViolation("%s exists and is not a folder; nothing was written" % out)
     os.makedirs(out, exist_ok=True)
     marker = os.path.join(out, MARKER)
     if not os.path.exists(marker):
         with open(marker, "w", encoding="utf-8") as fh:
-            fh.write("Created by 917v-code-review. Everything in this folder is review output; the review never "
-                     "writes anywhere else in the repository.\n")
+            fh.write("Created by 917v-code-review for %s. Everything in this folder is review output; the "
+                     "review never writes inside the repository.\n" % os.path.realpath(root))
     return out

@@ -9,13 +9,13 @@ Inputs:
   --integrity integrity.json optional, output of integrity.py verify
   --baseline baseline.json   optional, instead of --integrity: verify against this snapshot now
                              (writes integrity.json next to it), saving a separate call
-Outputs (in --out, normally docs/code-review/):
+Outputs (in --out, a folder outside the repository; see _common.default_output_dir):
   executive-summary.md, detailed-findings.md, security-review.md,
   architecture-review.md, recommendations.md, and dashboard.html (--html)
   --widget PATH also writes the in-chat results widget: an HTML fragment for a
   host's inline visual tool (generative UI in the chat). It is not a report.
 
-Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o docs/code-review [--html] [--widget W]
+Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o <out> [--html] [--widget W]
 """
 
 import argparse
@@ -29,7 +29,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import (CATEGORIES, OUTPUT_DIR, SEVERITIES, check_output_path, claim_output_dir, dump_json,  # noqa: E402
+from _common import (CATEGORIES, SEVERITIES, check_output_path, claim_output_dir, dump_json,  # noqa: E402
                      git, is_git_repo, load_json)
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -94,9 +94,22 @@ def health(findings):
     return {"score": score, "rating": rating}
 
 
+LINK_BASE = "../.."   # path from the report folder to the repository root; set by render()
+
+
+def link_base(root, out_dir):
+    """Relative path from the report folder to the repository root (links work on this machine)."""
+    if not out_dir:
+        return LINK_BASE
+    return os.path.relpath(os.path.abspath(root), os.path.abspath(out_dir)).replace(os.sep, "/")
+
+
+def src_link(path, line):
+    return "[`%s:%s`](%s/%s#L%s)" % (path, line, LINK_BASE, path, line)
+
+
 def link(f, line=None):
-    line = line or f["line"]
-    return "[`%s:%s`](../../%s#L%s)" % (f["file"], line, f["file"], line)
+    return src_link(f["file"], line or f["line"])
 
 
 def fence(evidence, path):
@@ -125,8 +138,7 @@ def finding_block(f):
     out += ["", "**Description**", "", f["description"], "", "**Evidence**", "", fence(f["evidence"], f["file"]),
             "", "**Potential impact**", "", f["impact"], "", "**Recommended solution**", "", f["recommendation"], ""]
     if f.get("related_locations"):
-        out += ["**Also found at:** " + ", ".join(
-            "[`%s:%s`](../../%s#L%s)" % (l["file"], l["line"], l["file"], l["line"]) for l in f["related_locations"]), ""]
+        out += ["**Also found at:** " + ", ".join(src_link(l["file"], l["line"]) for l in f["related_locations"]), ""]
     if f.get("validation_notes"):
         out += ["<sub>Validation: %s</sub>" % "; ".join(f["validation_notes"]), ""]
     return "\n".join(out)
@@ -216,8 +228,9 @@ def coverage_text(fdata, summary, stack, scope, integrity):
                      v.get("duplicates_merged", 0), v.get("line_corrections", 0)))
     if integrity is not None:
         if integrity.get("unchanged"):
-            lines.append("Read-only check: %d repository files hashed before and after the review — no file outside "
-                         "`%s` was modified." % (integrity.get("files_checked", 0), integrity.get("excluded")))
+            lines.append("Read-only check: %d repository files hashed before and after the review — no repository "
+                         "file was added, modified or deleted (reports are written outside the repository)."
+                         % integrity.get("files_checked", 0))
         else:
             lines.append("**Read-only check FAILED**: files changed during the review: %s." % ", ".join(
                 integrity.get("added", []) + integrity.get("modified", []) + integrity.get("deleted", [])))
@@ -289,6 +302,8 @@ def chat_widget(fdata, stack, common, hl):
 
 
 def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None, html=False, widget_path=None):
+    global LINK_BASE
+    LINK_BASE = link_base(root, out_dir)
     findings = fdata["findings"]
     totals = fdata["totals"]
     hl = health(findings)
@@ -422,8 +437,7 @@ def main():
     a = ap.parse_args()
     for path in (a.out, a.widget, a.baseline):
         check_output_path(a.root, path)
-    if os.path.realpath(a.out) == os.path.realpath(os.path.join(a.root, OUTPUT_DIR)):
-        claim_output_dir(a.root)
+    claim_output_dir(a.root, a.out)
     opt = lambda p: load_json(p) if p and os.path.exists(p) else None
     integ = opt(a.integrity)
     if a.baseline:

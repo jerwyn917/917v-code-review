@@ -12,7 +12,7 @@ Inputs:
   --scope   scope.json         optional, output of diff-scope.py (diff scans)
 Output: <out>/scan.md, plus a JSON summary on stdout.
 
-Usage: render-scan.py --root <repo> --stack S --signals G [--imports I] [--scope C] -o docs/code-review
+Usage: render-scan.py --root <repo> --stack S --signals G [--imports I] [--scope C] -o <out (outside the repo)>
 """
 
 import argparse
@@ -22,7 +22,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import OUTPUT_DIR, check_output_path, claim_output_dir, dump_json, load_json  # noqa: E402
+from _common import check_output_path, claim_output_dir, dump_json, load_json  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
     "render_reports", os.path.join(os.path.dirname(os.path.abspath(__file__)), "render-reports.py"))
@@ -52,6 +52,7 @@ def code_span(text):
 
 
 def render(root, stack, signals, imports=None, scope=None, out_dir=None):
+    base = render_reports.link_base(root, out_dir)
     sigs = signals.get("signals") or []
     by_agent = {}
     for s in sigs:
@@ -102,8 +103,8 @@ def render(root, stack, signals, imports=None, scope=None, out_dir=None):
         items = by_agent[a]
         lines += ["### %s" % area(a), "", "| Location | Hint | Snippet |", "|---|---|---|"]
         for s in items[:MAX_LEADS_PER_AREA]:
-            lines.append("| [`%s:%s`](../../%s#L%s) | %s | %s |" % (
-                s["file"], s["line"], s["file"], s["line"], cell(s.get("hint")),
+            lines.append("| [`%s:%s`](%s/%s#L%s) | %s | %s |" % (
+                s["file"], s["line"], base, s["file"], s["line"], cell(s.get("hint")),
                 code_span(cell((s.get("snippet") or "").strip()[:120]))))
         if len(items) > MAX_LEADS_PER_AREA:
             lines.append("| … | %d more in `.work/signals.json` | |" % (len(items) - MAX_LEADS_PER_AREA))
@@ -165,9 +166,7 @@ def main():
     ap.add_argument("--scope")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
-    check_output_path(a.root, a.out)
-    if os.path.realpath(a.out) == os.path.realpath(os.path.join(a.root, OUTPUT_DIR)):
-        claim_output_dir(a.root)
+    claim_output_dir(a.root, a.out)
     opt = lambda p: load_json(p) if p and os.path.exists(p) else None
     _, summary = render(a.root, load_json(a.stack), load_json(a.signals), opt(a.imports), opt(a.scope), a.out)
     summary["written"] = os.path.join(a.out, "scan.md")

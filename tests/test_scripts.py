@@ -39,6 +39,9 @@ validate = load("validate-findings")
 render = load("render-reports")
 
 
+os.environ[_common.OUT_ENV] = tempfile.mkdtemp(prefix="cr-out-")   # never write to ~ during tests
+
+
 def git(cwd, *args):
     subprocess.run(["git", "-C", cwd, "-c", "user.email=t@example.com", "-c", "user.name=t"] + list(args),
                    check=True, capture_output=True)
@@ -176,12 +179,13 @@ class TestSignalsAndGraph(unittest.TestCase):
                                      "--signals", os.path.join(tmp, "signals.json"),
                                      "--imports", os.path.join(tmp, "imports.json"), "-o", out))
             text = open(os.path.join(out, "scan.md"), encoding="utf-8").read()
-            self.assertEqual(os.listdir(out), ["scan.md"])
+            self.assertEqual(sorted(os.listdir(out)), [_common.MARKER, "scan.md"])
         self.assertGreater(summary["leads"], 5)
         self.assertEqual(summary["import_cycles"], 3)
         self.assertIn("Security", summary["leads_by_area"])
         self.assertIn("leads, not findings", text)
-        self.assertIn("[`src/users/users.service.ts:24`](../../src/users/users.service.ts#L24)", text)
+        base = os.path.relpath(fixture, out).replace(os.sep, "/")
+        self.assertIn("[`src/users/users.service.ts:24`](%s/src/users/users.service.ts#L24)" % base, text)
         self.assertIn("`` return this.dataSource.query(`SELECT", text)   # backticks in snippets kept verbatim
         self.assertNotIn("Pr0d-Orders-DB-2024!", text)
         self.assertNotIn("orders-jwt-signing-key-9f8e7d6c", text)
@@ -191,11 +195,14 @@ class TestSignalsAndGraph(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = os.path.join(tmp, "repo")
             shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), repo)
-            p = subprocess.run([sys.executable, os.path.join(SCRIPTS, "prepare-review.py"), repo],
+            out = os.path.join(tmp, "out")
+            p = subprocess.run([sys.executable, os.path.join(SCRIPTS, "prepare-review.py"), repo, "--out", out],
                                check=True, capture_output=True, text=True)
             summary = json.loads(p.stdout[p.stdout.index("{"):])
-            work = os.path.join(repo, "docs", "code-review", ".work")
-            for name in ("baseline.json", "stack.json", "files.txt", "signals.json", "import-graph.json", ".gitignore"):
+            work = os.path.join(out, ".work")
+            self.assertEqual(summary["out"], out)
+            self.assertFalse(os.path.exists(os.path.join(repo, "docs")))          # nothing inside the repo
+            for name in ("baseline.json", "stack.json", "files.txt", "signals.json", "import-graph.json"):
                 self.assertTrue(os.path.isfile(os.path.join(work, name)), name)
             self.assertEqual(len(os.listdir(os.path.join(work, "agents"))), 8)
             sec = open(os.path.join(work, "agents", "security-reviewer.md"), encoding="utf-8").read()
@@ -220,12 +227,16 @@ class TestSignalsAndGraph(unittest.TestCase):
             git(repo, "add", "-A")
             git(repo, "commit", "-qm", "init")
             script = os.path.join(SCRIPTS, "prepare-review.py")
-            p = subprocess.run([sys.executable, script, repo, "--mode", "diff"], capture_output=True, text=True)
+            out = os.path.join(tmp, "out")
+            p = subprocess.run([sys.executable, script, repo, "--mode", "diff", "--out", out], capture_output=True, text=True)
             self.assertEqual(p.returncode, 3)
             self.assertIn('"nothing_to_review": true', p.stdout)
-            p = subprocess.run([sys.executable, script, repo, "--mode", "scan"], check=True, capture_output=True, text=True)
+            p = subprocess.run([sys.executable, script, repo, "--mode", "scan", "--out", out],
+                               check=True, capture_output=True, text=True)
             summary = json.loads(p.stdout[p.stdout.index("{"):])
-            out = os.path.join(repo, "docs", "code-review")
+            git(repo, "status")
+            self.assertEqual(subprocess.run(["git", "-C", repo, "status", "--porcelain"], capture_output=True,
+                                            text=True).stdout, "")                 # repo untouched
             self.assertTrue(os.path.isfile(os.path.join(out, "scan.md")))
             self.assertFalse(os.path.exists(os.path.join(out, ".work", "baseline.json")))  # scan skips the baseline
             self.assertFalse(os.path.exists(os.path.join(out, ".work", "agents")))
@@ -236,32 +247,36 @@ class TestSignalsAndGraph(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = os.path.join(tmp, "repo")
             shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), repo)
-            # 1. A docs/code-review/ the project owns is never written to.
-            own = os.path.join(repo, "docs", "code-review")
-            os.makedirs(own)
-            with open(os.path.join(own, "checklist.md"), "w") as fh:
-                fh.write("team checklist\n")
-            p = subprocess.run([sys.executable, script, repo], capture_output=True, text=True)
+            # 1. Default output is outside the repository, named after it.
+            default = _common.default_output_dir(repo)
+            self.assertFalse(_common._inside(default, repo))
+            self.assertTrue(os.path.basename(default).startswith("repo-"))
+            # 2. Any output inside the repository is refused, including the old docs/code-review/.
+            for inside in (os.path.join(repo, "docs", "code-review"), os.path.join(repo, "src", "x.json")):
+                with self.assertRaises(SystemExit):
+                    _common.check_output_path(repo, inside)
+            p = subprocess.run([sys.executable, script, repo, "--out", os.path.join(repo, "docs", "code-review")],
+                               capture_output=True, text=True)
             self.assertEqual(p.returncode, _common.EXIT_OUTPUT_CONFLICT)
-            self.assertIn("did not create", p.stderr)
-            self.assertEqual(os.listdir(own), ["checklist.md"])
-            self.assertEqual(open(os.path.join(own, "checklist.md")).read(), "team checklist\n")
-            # 2. A folder holding only this tool's own outputs (older run) is claimed and marked.
-            os.remove(os.path.join(own, "checklist.md"))
-            with open(os.path.join(own, "scan.md"), "w") as fh:
-                fh.write("old\n")
-            subprocess.run([sys.executable, script, repo, "--mode", "scan"], check=True, capture_output=True)
-            self.assertTrue(os.path.isfile(os.path.join(own, _common.MARKER)))
-            # 3. Output paths inside the repo but outside docs/code-review/ are refused.
-            with self.assertRaises(SystemExit):
-                _common.check_output_path(repo, os.path.join(repo, "src", "x.json"))
-            self.assertEqual(_common.check_output_path(repo, os.path.join(own, "x.json")), os.path.join(own, "x.json"))
-            self.assertEqual(_common.check_output_path(repo, os.path.join(tmp, "x.json")), os.path.join(tmp, "x.json"))
+            self.assertFalse(os.path.exists(os.path.join(repo, "docs")))
             p = subprocess.run([sys.executable, os.path.join(SCRIPTS, "scan-signals.py"), repo,
                                 "-o", os.path.join(repo, "src", "signals.json")], capture_output=True, text=True)
             self.assertEqual(p.returncode, _common.EXIT_OUTPUT_CONFLICT)
             self.assertFalse(os.path.exists(os.path.join(repo, "src", "signals.json")))
-            # 4. Only read-only git subcommands are allowed.
+            # 3. A folder the user owns is never written to.
+            mine = os.path.join(tmp, "mine")
+            os.makedirs(mine)
+            with open(os.path.join(mine, "notes.md"), "w") as fh:
+                fh.write("mine\n")
+            p = subprocess.run([sys.executable, script, repo, "--out", mine], capture_output=True, text=True)
+            self.assertEqual(p.returncode, _common.EXIT_OUTPUT_CONFLICT)
+            self.assertEqual(os.listdir(mine), ["notes.md"])
+            # 4. A fresh or previously claimed folder is used and marked.
+            out = os.path.join(tmp, "out")
+            subprocess.run([sys.executable, script, repo, "--mode", "scan", "--out", out], check=True, capture_output=True)
+            self.assertTrue(os.path.isfile(os.path.join(out, _common.MARKER)))
+            subprocess.run([sys.executable, script, repo, "--mode", "scan", "--out", out], check=True, capture_output=True)
+            # 5. Only read-only git subcommands are allowed.
             with self.assertRaises(SystemExit):
                 _common.git(repo, "checkout", "-b", "x")
             with self.assertRaises(SystemExit):
@@ -279,8 +294,8 @@ class TestSignalsAndGraph(unittest.TestCase):
             index = os.path.join(repo, ".git", "index")
             os.utime(os.path.join(repo, "src", "main.ts"))      # a stale stat that git status would normally refresh
             before = (open(index, "rb").read(), os.stat(index).st_mtime_ns)
-            subprocess.run([sys.executable, os.path.join(SCRIPTS, "prepare-review.py"), repo, "--mode", "diff"],
-                           check=True, capture_output=True)
+            subprocess.run([sys.executable, os.path.join(SCRIPTS, "prepare-review.py"), repo, "--mode", "diff",
+                            "--out", os.path.join(tmp, "out")], check=True, capture_output=True)
             files, _ = render.render(repo, {"findings": [], "totals": {"findings": 0, "by_severity": {s: 0 for s in _common.SEVERITIES},
                                      "by_category": {c: 0 for c in _common.CATEGORIES}, "by_status": {"Confirmed": 0, "Potential": 0}}},
                                      None, {}, out_dir=None)
@@ -324,10 +339,12 @@ class TestValidateAndRender(unittest.TestCase):
         self.repo = tempfile.mkdtemp()
         shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), self.repo, dirs_exist_ok=True)
         self.work = tempfile.mkdtemp()
+        self.tmp_out = tempfile.mkdtemp()
 
     def tearDown(self):
         shutil.rmtree(self.repo)
         shutil.rmtree(self.work)
+        shutil.rmtree(self.tmp_out)
 
     def base(self, **kw):
         f = dict(severity="High", category="Security", title="SQL injection in user search",
@@ -441,7 +458,7 @@ class TestValidateAndRender(unittest.TestCase):
         res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"],
                                  "findings": [self.base(owasp="A03:2021", cwe="CWE-89")],
                                  "no_issue_areas": ["CORS reviewed"]})
-        out = os.path.join(self.repo, "docs", "code-review")
+        out = os.path.join(self.tmp_out, "report")
         summary = {"overall_summary": "S", "health_assessment": "H", "strategic_recommendations": [
             {"title": "Parameterize SQL", "detail": "d", "related": ["SEC-001"]}], "limitations": ["static only"]}
         files, hl = render.render(self.repo, res, detect.detect(self.repo), summary, out_dir=out, html=True)
@@ -450,7 +467,9 @@ class TestValidateAndRender(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(out, name)), name)
         self.assertIn("SEC-001", files["detailed-findings.md"])
         self.assertIn("| A03 | Injection | SEC-001 |", files["security-review.md"])
-        self.assertIn("../../src/users/users.service.ts#L24", files["detailed-findings.md"])
+        base = os.path.relpath(self.repo, out).replace(os.sep, "/")
+        self.assertIn("%s/src/users/users.service.ts#L24" % base, files["detailed-findings.md"])
+        self.assertFalse(os.path.exists(os.path.join(self.repo, "docs")))
         self.assertEqual(hl["score"], 93)
         self.assertNotIn("{{", "".join(files.values()))
         self.assertNotIn("</script><", files["dashboard.html"].split('type="application/json">')[1].split("</script>")[0])
@@ -465,7 +484,7 @@ class TestValidateAndRender(unittest.TestCase):
         res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"],
                                  "findings": [self.base(owasp="A03:2021", cwe="CWE-89",
                                                         title="Injection via {{q}} </script><b>x")]})
-        widget = os.path.join(self.repo, "docs", "code-review", ".work", "chat-widget.html")
+        widget = os.path.join(self.tmp_out, "report", ".work", "chat-widget.html")
         render.render(self.repo, res, detect.detect(self.repo), {}, out_dir=None, widget_path=widget)
         text = open(widget, encoding="utf-8").read()
         # Host widget rules: fragment only, no comments, scripts last, guarded sendPrompt, prefixed ids.
@@ -483,9 +502,11 @@ class TestValidateAndRender(unittest.TestCase):
 
     def test_integrity(self):
         snap = integrity.snapshot(self.repo)
-        os.makedirs(os.path.join(self.repo, "docs", "code-review"), exist_ok=True)
-        open(os.path.join(self.repo, "docs", "code-review", "x.md"), "w").write("ok")
         self.assertTrue(integrity.verify(self.repo, snap)["unchanged"])
+        os.makedirs(os.path.join(self.repo, "docs", "code-review"), exist_ok=True)   # nothing is excluded any more
+        open(os.path.join(self.repo, "docs", "code-review", "x.md"), "w").write("ok")
+        self.assertEqual(integrity.verify(self.repo, snap)["added"], ["docs/code-review/x.md"])
+        os.remove(os.path.join(self.repo, "docs", "code-review", "x.md"))
         open(os.path.join(self.repo, "src", "main.ts"), "a").write("\n// edit\n")
         r = integrity.verify(self.repo, snap)
         self.assertFalse(r["unchanged"])

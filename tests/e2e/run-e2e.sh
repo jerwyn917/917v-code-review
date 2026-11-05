@@ -38,6 +38,7 @@ cp -R "$REPO" "$RUN/pristine"
 rm -rf "$RUN/pristine/.git"
 
 ALLOWED="Read,Grep,Glob,Write,Agent,Task,Skill,Bash(python3:*),Bash(git:*),Bash(mkdir:*),Bash(ls:*),Bash(wc:*),Bash(cat:*),Bash(head:*)"
+export CODE_REVIEW_OUT_DIR="$RUN/reports"   # reports land here, outside the reviewed copy
 START=$(date +%s)
 ( cd "$REPO" && claude -p "$PROMPT" --plugin-dir "$PLUGIN" --allowedTools "$ALLOWED" \
     --output-format stream-json --verbose > "$RUN/transcript.jsonl" 2> "$RUN/stderr.log" ) || echo "claude exited non-zero" >&2
