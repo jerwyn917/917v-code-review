@@ -242,18 +242,15 @@ class Graph:
         return comp + [start]
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("root")
-    ap.add_argument("-o", "--output", default="-")
-    a = ap.parse_args()
-    g = Graph(a.root).build()
+def analyze(root):
+    """Import-graph summary: edges, cycles, fan-in and fan-out leaders."""
+    g = Graph(root).build()
     cycles = g.cycles()
     fan_in = {}
     for src, dsts in g.edges.items():
         for d in dsts:
             fan_in[d] = fan_in.get(d, 0) + 1
-    dump_json({
+    return {
         "files_with_imports": len(g.edges),
         "internal_edges": sum(len(v) for v in g.edges.values()),
         "cycles": [{"files": c, "example_path": g.example_cycle(c)} for c in cycles],
@@ -261,7 +258,15 @@ def main():
                              for f, n in sorted(fan_in.items(), key=lambda kv: (-kv[1], kv[0]))[:15]],
         "highest_fan_out": [{"file": f, "imports": len(d)}
                             for f, d in sorted(g.edges.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:15]],
-    }, a.output)
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("root")
+    ap.add_argument("-o", "--output", default="-")
+    a = ap.parse_args()
+    dump_json(analyze(a.root), a.output)
 
 
 if __name__ == "__main__":

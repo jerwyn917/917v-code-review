@@ -14,6 +14,12 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 - `tests/test_build_skill.py`.
 
 ### Changed
+- Faster reviews and scans, with fewer round trips and less instruction text to read:
+  - `scripts/prepare-review.py` replaces about 8 orchestrator calls (baseline, stack, scope, signals, import graph, work-dir setup) with one. It also writes a per-agent inputs file (`.work/agents/<agent>.md`: stack digest, scope, priority files, that agent's signals, matching stack-checklist sections), so agent prompts are a few lines instead of hand-assembled context.
+  - `render-reports.py --baseline` runs the read-only integrity check in the same call as rendering.
+  - `/917v-code-review:scan` is now a single `prepare-review.py --mode scan` call.
+  - `reviewer-protocol.md` is self-contained (output contract, severity rules, ownership tie-breakers) and adds speed rules: read the protocol and inputs in one parallel step, batch independent reads, Grep before Read, and a 10–30 call budget. Agents no longer read four further reference files.
+  - Both orchestrator `SKILL.md` files are rewritten around these calls, with speed rules for parallel tool use and a single final validator run.
 - `render-reports.py` checks template placeholders against the template, not the filled output, so finding text containing `{{...}}` no longer aborts rendering.
 
 ## [1.0.0] - 2026-11-03

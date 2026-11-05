@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -53,6 +54,18 @@ class BuildSkillTest(unittest.TestCase):
              os.path.join(self.dst, "scripts", "render-reports.py")],
             capture_output=True, text=True, check=True)
         self.assertEqual(out.stdout.strip(), self.version)
+
+    def test_prepare_review_in_skill_layout(self):
+        # The standalone layout keeps stack-checklists.md in references/, not skills/.../references/.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            shutil.copytree(os.path.join(REPO, "tests", "fixtures", "nestjs-orders-api"), repo)
+            p = subprocess.run([sys.executable, os.path.join(self.dst, "scripts", "prepare-review.py"), repo],
+                               capture_output=True, text=True, check=True)
+            self.assertIn('"NestJS"', p.stdout)
+            brief = open(os.path.join(repo, "docs", "code-review", ".work", "agents", "security-reviewer.md"),
+                         encoding="utf-8").read()
+            self.assertIn("## NestJS", brief)
 
 
 if __name__ == "__main__":

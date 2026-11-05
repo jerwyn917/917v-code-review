@@ -7,6 +7,8 @@ Inputs:
   --summary  summary.json    narrative written by the orchestrating skill
   --scope    scope.json      optional, diff reviews only
   --integrity integrity.json optional, output of integrity.py verify
+  --baseline baseline.json   optional, instead of --integrity: verify against this snapshot now
+                             (writes integrity.json next to it), saving a separate call
 Outputs (in --out, normally docs/code-review/):
   executive-summary.md, detailed-findings.md, security-review.md,
   architecture-review.md, recommendations.md, and dashboard.html (--html)
@@ -19,6 +21,7 @@ Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o doc
 import argparse
 import datetime
 import html as htmllib
+import importlib.util
 import json
 import math
 import os
@@ -411,15 +414,28 @@ def main():
     ap.add_argument("--summary")
     ap.add_argument("--scope")
     ap.add_argument("--integrity")
+    ap.add_argument("--baseline", help="integrity.py snapshot to verify now (instead of --integrity)")
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("--html", action="store_true", help="also write dashboard.html (amCharts analytics)")
     ap.add_argument("--widget", help="also write the in-chat results widget (HTML fragment) to this path")
     a = ap.parse_args()
     opt = lambda p: load_json(p) if p and os.path.exists(p) else None
+    integ = opt(a.integrity)
+    if a.baseline:
+        spec = importlib.util.spec_from_file_location("integrity", os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "integrity.py"))
+        integrity_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(integrity_mod)
+        integ = integrity_mod.verify(a.root, load_json(a.baseline))
+        dump_json(integ, os.path.join(os.path.dirname(os.path.abspath(a.baseline)), "integrity.json"))
     files, hl = render(a.root, load_json(a.findings), opt(a.stack), opt(a.summary) or {}, opt(a.scope),
-                       opt(a.integrity), a.out, a.html, a.widget)
+                       integ, a.out, a.html, a.widget)
     written = sorted(os.path.join(a.out, n) for n in files) + ([a.widget] if a.widget else [])
-    dump_json({"written": written, "health": hl})
+    result = {"written": written, "health": hl}
+    if integ is not None:
+        result["read_only_check"] = "unchanged" if integ.get("unchanged") else {
+            k: integ.get(k, []) for k in ("added", "modified", "deleted")}
+    dump_json(result)
 
 
 if __name__ == "__main__":

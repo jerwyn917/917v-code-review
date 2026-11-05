@@ -40,21 +40,21 @@ You can also ask in plain words, for example "review this repo" or "do a securit
 ## How a review runs
 
 ```
- 1. integrity.py snapshot      hash every file (proves read-only at the end)
- 2. detect-stack.py            languages, frameworks, DBs, tests, infra, CI, entry points, critical paths
- 3. read README / standards    conventions the reviewers must respect
- 4. diff-scope.py (diff only)  changed files + changed line ranges
-    scan-signals.py            regex hints with file:line (unverified leads, secrets redacted)
-    import-graph.py            file-level import graph + circular dependencies
- 5. select agents              from the stack and the mode; skipped agents are listed with reasons
- 6. run agents in parallel     each returns JSON per references/finding-schema.md
- 7. consolidate                raw agent outputs saved verbatim
- 8-9. validate-findings.py     verify file/line/evidence, fix line drift, enforce severity rules,
+ 1. prepare-review.py          ONE call: integrity baseline, stack detection, diff scope, pattern signals,
+                               import graph, and one inputs file per agent (.work/agents/<agent>.md with
+                               stack digest, scope, priority files, its signals, matching stack checklists)
+ 2. read README / standards    one parallel batch, then a 10-25 line review brief (.work/brief.md)
+ 3. select agents              from the stack and the mode; skipped agents are listed with reasons
+ 4. run agents in parallel     short prompts; each agent reads the self-contained reviewer protocol and
+                               its inputs file in one step, batches its reads, returns JSON
+ 5. validate-findings.py       verify file/line/evidence, fix line drift, enforce severity rules,
                                auto-merge strong duplicates, redact secrets, assign IDs (SEC-001, ...)
       + orchestrator decides cross-agent merge candidates (merges.json, auditable)
-      + orchestrator re-reads every Critical/High finding in context
-10. integrity.py verify + render-reports.py → docs/code-review/
+      + orchestrator re-reads every Critical/High finding in context (one parallel batch)
+ 6. render-reports.py          ONE call: read-only integrity check + reports + dashboard + chat widget
 ```
+
+`/917v-code-review:scan` is step 1 alone (`prepare-review.py --mode scan`): one call, no agents, `scan.md`.
 
 The scripts are deterministic and use only the Python standard library. The judgment comes from the agents, and the scripts keep it honest.
 

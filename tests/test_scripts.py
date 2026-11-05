@@ -187,6 +187,50 @@ class TestSignalsAndGraph(unittest.TestCase):
         self.assertNotIn("orders-jwt-signing-key-9f8e7d6c", text)
         self.assertIn("/917v-code-review:review", text)
 
+    def test_prepare_review_one_call(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), repo)
+            p = subprocess.run([sys.executable, os.path.join(SCRIPTS, "prepare-review.py"), repo],
+                               check=True, capture_output=True, text=True)
+            summary = json.loads(p.stdout[p.stdout.index("{"):])
+            work = os.path.join(repo, "docs", "code-review", ".work")
+            for name in ("baseline.json", "stack.json", "files.txt", "signals.json", "import-graph.json", ".gitignore"):
+                self.assertTrue(os.path.isfile(os.path.join(work, name)), name)
+            self.assertEqual(len(os.listdir(os.path.join(work, "agents"))), 8)
+            sec = open(os.path.join(work, "agents", "security-reviewer.md"), encoding="utf-8").read()
+            arc = open(os.path.join(work, "agents", "architecture-reviewer.md"), encoding="utf-8").read()
+            self.assertIn("files: 22", p.stdout)                                  # stack digest printed
+            self.assertEqual(summary["import_cycles"], 3)
+            self.assertIn("NestJS", summary["checklist_sections"])
+            self.assertNotIn("Java / Spring Boot", summary["checklist_sections"])
+            self.assertIn("src/users/users.service.ts:24", sec)                     # its own signals
+            self.assertNotIn("[docker-unpinned-base]", sec)                         # not devops' signals
+            self.assertIn("## NestJS", sec)
+            self.assertIn("## Import cycles", arc)
+            self.assertNotIn("Pr0d-Orders-DB-2024!", sec)
+            # Integrity check inside render-reports (--baseline): nothing changed yet.
+            self.assertTrue(integrity.verify(repo, json.load(open(os.path.join(work, "baseline.json"))))["unchanged"])
+
+    def test_prepare_review_empty_diff_and_scan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "repo")
+            shutil.copytree(os.path.join(FIXTURES, "nestjs-orders-api"), repo)
+            git(repo, "init", "-q", "-b", "main")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-qm", "init")
+            script = os.path.join(SCRIPTS, "prepare-review.py")
+            p = subprocess.run([sys.executable, script, repo, "--mode", "diff"], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 3)
+            self.assertIn('"nothing_to_review": true', p.stdout)
+            p = subprocess.run([sys.executable, script, repo, "--mode", "scan"], check=True, capture_output=True, text=True)
+            summary = json.loads(p.stdout[p.stdout.index("{"):])
+            out = os.path.join(repo, "docs", "code-review")
+            self.assertTrue(os.path.isfile(os.path.join(out, "scan.md")))
+            self.assertFalse(os.path.exists(os.path.join(out, ".work", "baseline.json")))  # scan skips the baseline
+            self.assertFalse(os.path.exists(os.path.join(out, ".work", "agents")))
+            self.assertGreater(summary["leads"], 5)
+
     def test_cycles(self):
         g = graph.Graph(os.path.join(FIXTURES, "nestjs-orders-api")).build()
         cycles = g.cycles()
