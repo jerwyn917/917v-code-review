@@ -157,6 +157,8 @@ claude plugin install 917v-code-review@917ventures
 
 Or inside Claude Code: `/plugin marketplace add jerwyn917/917v-code-review`, then `/plugin install 917v-code-review@917ventures`.
 
+After installation, the first new Claude Code session asks once whether to run one of the commands now (quick scan, review your changes, full review, or not now). Nothing runs unless you pick it.
+
 Try it without installing:
 
 ```bash

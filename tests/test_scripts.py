@@ -513,5 +513,29 @@ class TestValidateAndRender(unittest.TestCase):
         self.assertEqual(r["modified"], ["src/main.ts"])
 
 
+
+class TestWelcomeHook(unittest.TestCase):
+    def run_hook(self, folder):
+        env = dict(os.environ, CODE_REVIEW_WELCOME_DIR=folder)
+        return subprocess.run([sys.executable, os.path.join(SCRIPTS, "welcome.py")], input='{"source":"startup"}',
+                              capture_output=True, text=True, env=env, check=True)
+
+    def test_offers_once(self):
+        folder = os.path.join(tempfile.mkdtemp(prefix="cr-welcome-"), "data")
+        out = json.loads(self.run_hook(folder).stdout)
+        hso = out["hookSpecificOutput"]
+        self.assertEqual(hso["hookEventName"], "SessionStart")
+        self.assertIn("AskUserQuestion", hso["additionalContext"])
+        for cmd in ("scan", "review-diff", "review", "security", "architecture"):
+            self.assertIn("917v-code-review:" + cmd, hso["additionalContext"])
+        self.assertTrue(os.path.exists(os.path.join(folder, ".welcomed")))
+        self.assertEqual(self.run_hook(folder).stdout, "")                # second start: silent
+
+    def test_hook_registered(self):
+        with open(os.path.join(ROOT, "hooks", "hooks.json"), encoding="utf-8") as f:
+            hooks = json.load(f)["hooks"]["SessionStart"]
+        self.assertIn("scripts/welcome.py", hooks[0]["hooks"][0]["command"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 ## [Unreleased]
 
 ### Added
+- Post-install offer: a `SessionStart` hook (`hooks/hooks.json` → `scripts/welcome.py`) runs once after the plugin is installed and has Claude ask, with the AskUserQuestion tool, whether to run a command now (Quick scan, Review my changes, Full review, Not now; security and architecture under Other). The marker lives in `${CLAUDE_PLUGIN_DATA}` (fallback `~/.917v-code-review/`), so it asks once per install. The standalone skill asks the same question when it is invoked with no request.
 - `/917v-code-review:scan`: quick read-only triage that runs only the deterministic scripts (stack detection, pattern leads, import cycles; optional diff selectors) and writes `docs/code-review/scan.md` via the new `scripts/render-scan.py`. No reviewer agents, so results are leads, not findings. The standalone skill gets the same `scan` mode.
 - Dashboard analytics with amCharts 5 (5.21.5, cdnjs) in 917 Ventures branding: health gauge, severity donut, category × severity bars, OWASP Top 10 columns, hotspot files, and a reviewer × severity heatmap. Chart clicks cross-filter the findings list. Light and dark themes; HTML-bar fallback offline.
 - In-chat results widget (generative UI): `render-reports.py --widget` writes `.work/chat-widget.html`, which the orchestrator renders with the host's inline visual tool when one is available. It has KPI cards, amCharts charts, a severity filter, and `sendPrompt` buttons ("Explain ↗", fix plan, open dashboard).

@@ -32,11 +32,14 @@ Skill root: the directory that contains this `SKILL.md` (Claude Code shows it as
 
 | User says / argument | mode |
 |---|---|
-| "review this repo", `full`, nothing | `full` (default) |
+| "review this repo", `full` | `full` (default) |
+| nothing: the skill was invoked with no request (for example right after it was installed) | ask first: see below |
 | "review my changes / diff / branch / PR", `diff` | `diff` |
 | "security review", "OWASP", `security` | `security` |
 | "architecture review", "code quality", `architecture` | `architecture` |
 | "quick scan", "scan", "triage", `scan` | `scan`: see **Quick scan mode** |
+
+**No request given:** when the AskUserQuestion tool is available, ask one question before preparing anything: "Which 917v code review should I run on this repository?" with the options "Quick scan" (`scan`), "Review my changes" (`diff`), "Full review" (`full`), and "Security review" (`security`); architecture goes under Other. Run the mode the user picks. Without that tool, use `full`.
 
 - `ROOT`: the path given, otherwise `git rev-parse --show-toplevel`, otherwise the current directory, as an absolute path. If the user uploaded an archive, extract it into a new empty folder and review that. `OUT` and `WORK` are the `out` and `work` paths printed by the prepare call.
 - Diff selectors: `--staged`, `--branch <base>` ("against main"), `--range <a>..<b>`. With no selector, diff mode means uncommitted changes, including untracked files.

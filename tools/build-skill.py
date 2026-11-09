@@ -90,7 +90,7 @@ def build(out_root):
     with open(os.path.join(dst, "VERSION"), "w", encoding="utf-8") as f:
         f.write(version + "\n")
 
-    copy_files(os.path.join(REPO, "scripts"), os.path.join(dst, "scripts"), r"[\w-]+\.py")
+    copy_files(os.path.join(REPO, "scripts"), os.path.join(dst, "scripts"), r"(?!welcome\.py$)[\w-]+\.py")   # welcome.py is the plugin's install hook
     copy_files(os.path.join(REPO, "templates"), os.path.join(dst, "templates"), r"[\w-]+\.(md|html)")
     copy_files(os.path.join(REPO, "templates", "assets"), os.path.join(dst, "templates", "assets"), r"[\w-]+\.datauri")
     copy_files(os.path.join(REPO, "skills", "comprehensive-review", "references"),
