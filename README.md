@@ -7,7 +7,7 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 - **Eight specialist agents**: architecture, security, performance, backend, frontend, database, testing, devops. They are selected by the detected stack and have non-overlapping responsibilities.
 - **Validation of every finding against the source**. The file must exist, the line must exist, and the evidence must appear in the file. Wrong line numbers are corrected, unverifiable claims are rejected, duplicates are merged, and secrets are redacted.
 - **Consolidated reports** in a folder **outside your repository** (`~/.917v-code-review/reviews/<repo>-<id>/` by default): executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, an **Explore** page that lays the findings out as a navigable floor plan, and `findings.json`.
-- **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, "Explain ↗" buttons that send follow-up questions back to Claude, and buttons that open Explore and the full dashboard.
+- **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, "Explain ↗" buttons that send follow-up questions back to Claude, and **Explore** and **Open the full dashboard** buttons that open those pages in your browser with one click.
 - **Analysis only, never touches your repository.** It never edits, formats, or deletes project files, never applies fixes, and writes nothing inside the repository. Reports go to a folder outside it, claimed with a `.917v-code-review` marker, and a folder you own is never overwritten. The scripts refuse any output path inside the repository and run only read-only Git commands, without rewriting `.git/index`. Every file is hashed before and after, and the report states whether anything changed.
 
 ## Commands
@@ -51,7 +51,7 @@ You can also ask in plain words, for example "review this repo" or "do a securit
                                auto-merge strong duplicates, redact secrets, assign IDs (SEC-001, ...)
       + orchestrator decides cross-agent merge candidates (merges.json, auditable)
       + orchestrator re-reads every Critical/High finding in context (one parallel batch)
- 6. render-reports.py          ONE call: read-only integrity check + reports + dashboard + chat widget
+ 6. render-reports.py          ONE call: read-only integrity check + reports + dashboard + Explore + chat widget + viewer links
 ```
 
 `/917v-code-review:scan` is step 1 alone (`prepare-review.py --mode scan`): one call, no agents, `scan.md`.
@@ -147,7 +147,18 @@ Explore draws only what is in this review's `findings.json`; nothing is sampled,
 
 ### In-chat results widget
 
-`render-reports.py --widget <path>` writes `.work/chat-widget.html`, an HTML fragment that follows the inline-widget rules of the 917 Ventures generative-UI skill: fragment only, host theme tokens, no comments, amCharts with an HTML fallback, and `sendPrompt` buttons, including "Explore ↗" and "Open the full dashboard ↗". The orchestrator passes it unchanged to the host's inline visual tool. In the terminal there is no such tool, and the text summary is shown instead.
+`render-reports.py --widget <path>` writes `.work/chat-widget.html`, an HTML fragment that follows the inline-widget rules of the 917 Ventures generative-UI skill: fragment only, host theme tokens, no comments, amCharts with an HTML fallback, and `sendPrompt` buttons. The orchestrator passes it unchanged to the host's inline visual tool. In the terminal there is no such tool, and the text summary is shown instead.
+
+#### One-click Explore and dashboard
+
+The widget's **Explore** and **Open the full dashboard** buttons are real links, so clicking one opens the page in your browser (or the Claude browser pane) straight away. Nothing has to be typed or sent in the chat.
+
+A chat widget cannot open `file://` pages, so `render-reports.py --serve` starts a small viewer, `scripts/serve-reports.py`, and writes its links into the two buttons and into the final message:
+
+- It listens on `127.0.0.1` only, on a free port, and every link carries a random token, so nothing is reachable from another machine or guessable by another local user.
+- It serves only that review's report pages, plus a read-only view of the repository's files for Explore's "View file at line N", with secret values redacted as in the reports. It accepts `GET` only and never writes anything.
+- It stops by itself after two hours without a request. A later review of the same repository reuses the running viewer, and `python3 scripts/serve-reports.py --root <repo> -o <report folder>` starts it again (`--stop` ends it).
+- Where a local server cannot start, the two buttons fall back to asking Claude in the chat, and the report files still open from disk.
 
 An example report generated from the bundled NestJS fixture is in [`examples/nestjs-orders-api/`](examples/nestjs-orders-api/).
 

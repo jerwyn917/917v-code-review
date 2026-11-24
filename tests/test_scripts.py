@@ -37,6 +37,7 @@ graph = load("import-graph")
 integrity = load("integrity")
 validate = load("validate-findings")
 render = load("render-reports")
+serve = load("serve-reports")
 
 
 os.environ[_common.OUT_ENV] = tempfile.mkdtemp(prefix="cr-out-")   # never write to ~ during tests
@@ -547,6 +548,83 @@ class TestValidateAndRender(unittest.TestCase):
         self.assertFalse(r["unchanged"])
         self.assertEqual(r["modified"], ["src/main.ts"])
 
+
+
+class TestViewer(unittest.TestCase):
+    """serve-reports.py: the loopback viewer behind the widget's Explore and dashboard buttons."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="cr-viewer-")
+        self.repo = os.path.join(self.tmp, "repo")
+        self.out = os.path.join(self.tmp, "out")
+        os.makedirs(os.path.join(self.repo, "src"))
+        os.makedirs(self.out)
+        with open(os.path.join(self.repo, "src", "app.ts"), "w") as fh:
+            fh.write("const a = 1;\nconst password = 'hunter2-super-secret-value';\nexport default a;\n")
+        with open(os.path.join(self.tmp, "outside.txt"), "w") as fh:
+            fh.write("outside the repository")
+        for name in ("dashboard.html", "explore.html"):
+            with open(os.path.join(self.out, name), "w") as fh:
+                fh.write("<!doctype html><title>%s</title>" % name)
+        with open(os.path.join(self.out, "notes.txt"), "w") as fh:
+            fh.write("not a report")
+        self.viewer = serve.start(self.repo, self.out, idle_minutes=1)
+        if not self.viewer:
+            self.skipTest("cannot start a loopback server in this environment")
+
+    def tearDown(self):
+        serve.stop(self.out)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def get(self, url):
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(url, timeout=5) as r:
+                return r.status, r.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            return e.code, ""
+
+    def test_serves_reports_and_source_only(self):
+        v = self.viewer
+        self.assertRegex(v["explore"], r"^http://127\.0\.0\.1:\d+/[\w-]{10,}/explore\.html$")
+        self.assertEqual(self.get(v["explore"])[0], 200)
+        self.assertIn("dashboard.html", self.get(v["dashboard"])[1])
+        code, page = self.get(v["url"] + "/_src/src/app.ts?line=2")
+        self.assertEqual(code, 200)
+        self.assertIn('<li id="L2" class="hit">', page)
+        self.assertEqual(page.count("<li id="), 3)
+        self.assertNotIn("hunter2-super-secret-value", page)        # redacted like the reports
+        base = v["url"].rsplit("/", 1)[0]
+        for url in (base + "/explore.html",                         # no token
+                    base + "/wrong-token/explore.html",
+                    v["url"] + "/notes.txt",                        # not a report type
+                    v["url"] + "/.work/viewer.json",                # scratch and state stay private
+                    v["url"] + "/_src/../outside.txt",              # never leaves the repository
+                    v["url"] + "/_src/%2e%2e/outside.txt",
+                    v["url"] + "/_src/missing.ts"):
+            self.assertEqual(self.get(url)[0], 404, url)
+        again = serve.start(self.repo, self.out)                    # a second render reuses the same URLs
+        self.assertTrue(again["reused"])
+        self.assertEqual(again["explore"], v["explore"])
+
+    def test_refuses_a_report_folder_inside_the_repository(self):
+        with self.assertRaises(SystemExit):
+            serve.start(self.repo, os.path.join(self.repo, "docs"))
+
+    def test_widget_buttons_link_straight_to_the_viewer(self):
+        fdata = {"findings": [], "totals": {"findings": 0, "by_severity": {s: 0 for s in _common.SEVERITIES},
+                                             "by_category": {}, "by_status": {"Confirmed": 0, "Potential": 0}}}
+        widget = os.path.join(self.out, ".work", "chat-widget.html")
+        render.render(self.repo, fdata, {}, {}, out_dir=None, html=True, widget_path=widget, viewer=self.viewer)
+        text = open(widget, encoding="utf-8").read()
+        data = json.loads(text.split("const DATA = ")[1].split(";\n")[0].replace("<\\/", "</"))
+        self.assertEqual(data["urls"], {"explore": self.viewer["explore"], "dashboard": self.viewer["dashboard"]})
+        self.assertIn('<a class="go main" id="v917cr-explore"', text)
+        self.assertIn('<a class="go" id="v917cr-dash"', text)
+        render.render(self.repo, fdata, {}, {}, out_dir=None, html=True, widget_path=widget)
+        text = open(widget, encoding="utf-8").read()
+        self.assertIsNone(json.loads(text.split("const DATA = ")[1].split(";\n")[0].replace("<\\/", "</"))["urls"])
 
 
 class TestWelcomeHook(unittest.TestCase):

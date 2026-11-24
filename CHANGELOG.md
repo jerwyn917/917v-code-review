@@ -5,6 +5,11 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 ## [Unreleased]
 
 ### Added
+- **One-click Explore and dashboard from the results widget.** The widget's "Explore" and "Open the full dashboard" buttons are now real links that open the pages in the browser directly, with no chat message.
+  - `scripts/serve-reports.py` is a loopback-only viewer for one report folder: `127.0.0.1`, a free port, a random token in every URL, `GET` only, auto-stop after two idle hours, reused by later renders.
+  - `render-reports.py --serve` starts or reuses it, writes its links into the widget, and prints them under `viewer` for the final message.
+  - Opened through the viewer, Explore's "View file at line N" shows the file in a read-only, line-numbered page with the cited lines highlighted and secret values redacted.
+  - Where a local server cannot start, the buttons fall back to asking in chat.
 - **Explore**: `render-reports.py --html` now also writes `explore.html`, the review's findings as an interactive floor plan (`templates/explore.html`).
   - Wings are directories, rooms are files, tiles are findings. Arrange by files, categories, or severity; pan, zoom, minimap; search; filters for severity, category, file, and status.
   - A detail panel shows every field of the selected finding, with previous/next, "Open in VS Code / Cursor", "View file", and "Copy location". Missing file or line metadata is stated, never invented.

@@ -52,7 +52,7 @@ OUTPUT_DIR = os.path.join("docs", "code-review")
 OUT_ENV = "CODE_REVIEW_OUT_DIR"   # base folder for reports (default ~/.917v-code-review/reviews)
 MARKER = ".917v-code-review"   # ownership marker inside the output folder
 OWN_OUTPUTS = {MARKER, ".work", "executive-summary.md", "detailed-findings.md", "security-review.md",
-               "architecture-review.md", "recommendations.md", "dashboard.html", "findings.json", "scan.md"}
+               "architecture-review.md", "recommendations.md", "dashboard.html", "explore.html", "findings.json", "scan.md"}
 READ_ONLY_GIT = {"rev-parse", "ls-files", "diff", "merge-base", "status", "log", "show", "cat-file"}
 EXIT_OUTPUT_CONFLICT = 4
 

@@ -260,7 +260,13 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
   const NOFILE = "No file location";
   const locText = (file, line, end) => file + (line ? ":" + line + (end && end !== line ? "–" + end : "") : "");
   const encPath = p => p.split("/").map(encodeURIComponent).join("/");
-  const fileHref = file => (data.link_base != null && file) ? data.link_base + "/" + encPath(file) : null;
+  // Opened through the review's loopback viewer, files come from its read-only source view, at the cited line.
+  const VIA_VIEWER = !!data.viewer && /^https?:$/.test(location.protocol) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  function fileHref(file, line, end) {
+    if (!file) return null;
+    if (VIA_VIEWER) return "_src/" + encPath(file) + (line ? "?line=" + line + (end && end > line ? "&end=" + end : "") + "#L" + line : "");
+    return data.link_base != null ? data.link_base + "/" + encPath(file) : null;
+  }
   function editorHref(scheme, file, line) {
     if (!data.source_root || !file) return null;
     const abs = String(data.source_root).replace(/\\/g, "/").replace(/\/+$/, "") + "/" + file;
@@ -735,13 +741,13 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
     if (t && document.activeElement && panel.contains(document.activeElement)) t.el.focus({ preventScroll: true });
   }
   function sect(title, node) { const s = el("section", { "class": "rv" }); s.appendChild(el("h3", null, title)); s.appendChild(node); return s; }
-  function locActions(file, line) {
+  function locActions(file, line, end) {
     const box = el("div", { "class": "acts" });
     [["vscode", "Open in VS Code"], ["cursor", "Open in Cursor"]].forEach(e => {
       const h = editorHref(e[0], file, line); if (h) box.appendChild(el("a", { "class": "btn", href: h }, e[1]));
     });
-    const fh = fileHref(file);
-    if (fh) box.appendChild(el("a", { "class": "btn", href: fh, target: "_blank", rel: "noopener" }, "View file"));
+    const fh = fileHref(file, line, end);
+    if (fh) box.appendChild(el("a", { "class": "btn", href: fh, target: "_blank", rel: "noopener" }, VIA_VIEWER && line ? "View file at line " + line : "View file"));
     const cp = el("button", { type: "button", "class": "btn" }, "Copy location");
     cp.onclick = () => {
       const text = locText(file, line), done = () => { cp.textContent = "Copied"; pop(cp); setTimeout(() => { cp.textContent = "Copy location"; }, 1200); };
@@ -769,7 +775,7 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
     if (f.file) {
       loc.appendChild(el("div", { "class": "mono" }, locText(f.file, f.line, f.end_line)));
       if (!f.line) loc.appendChild(el("div", { "class": "muted" }, "No line number was recorded for this finding."));
-      loc.appendChild(locActions(f.file, f.line));
+      loc.appendChild(locActions(f.file, f.line, f.end_line));
     } else loc.appendChild(el("div", { "class": "muted" }, "No file location was recorded for this finding."));
     pbody.appendChild(loc);
 
@@ -782,7 +788,7 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
       const ul = el("ul", { "class": "rel" });
       rel.forEach(l => {
         const li = el("li"); li.appendChild(el("span", { "class": "mono" }, locText(l.file, l.line)));
-        const vs = editorHref("vscode", l.file, l.line), fh = fileHref(l.file);
+        const vs = editorHref("vscode", l.file, l.line), fh = fileHref(l.file, l.line);
         if (vs) li.appendChild(el("a", { href: vs }, "VS Code"));
         if (fh) li.appendChild(el("a", { href: fh, target: "_blank", rel: "noopener" }, "View file"));
         ul.appendChild(li);

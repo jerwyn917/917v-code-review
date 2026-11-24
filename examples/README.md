@@ -9,7 +9,7 @@
 - [recommendations.md](nestjs-orders-api/recommendations.md)
 - [dashboard.html](nestjs-orders-api/dashboard.html): open it in a browser. amCharts analytics: health gauge, severity, category, OWASP, hotspot files, reviewer heatmap
 - [explore.html](nestjs-orders-api/explore.html): open it in a browser. The same 53 findings as an interactive floor plan: pan and zoom, search, filters, a detail panel, and links back to the dashboard. In this copy "View file" points at the fixture under `tests/fixtures/nestjs-orders-api/`, and the "Open in VS Code / Cursor" buttons are left out because they need the absolute path of the machine that ran the review
-- [chat-widget.html](nestjs-orders-api/chat-widget.html): the in-chat results widget, the fragment the orchestrator passes to the host's inline visual tool (copied from `.work/`)
+- [chat-widget.html](nestjs-orders-api/chat-widget.html): the in-chat results widget, the fragment the orchestrator passes to the host's inline visual tool (copied from `.work/`). In a real run its "Explore" and "Open the full dashboard" buttons are direct links to the review's local viewer; this static copy has no viewer, so they show the chat fallback
 - [findings.json](nestjs-orders-api/findings.json): machine-readable findings
 - `summary.json` and `merges.json`: the orchestrator's narrative and its duplicate-merge decisions, copied from `.work/` for reference
 

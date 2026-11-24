@@ -137,23 +137,27 @@ Write `$WORK/summary.json` with the fields in `$S/references/report-guide.md`. B
 
 ```bash
 python3 "$S/scripts/render-reports.py" --root "$ROOT" --findings "$OUT/findings.json" --stack "$WORK/stack.json" \
-  --summary "$WORK/summary.json" [--scope "$WORK/scope.json"] --baseline "$WORK/baseline.json" -o "$OUT" --html --widget "$WORK/chat-widget.html"
+  --summary "$WORK/summary.json" [--scope "$WORK/scope.json"] --baseline "$WORK/baseline.json" -o "$OUT" --html --widget "$WORK/chat-widget.html" --serve
 ```
 
-`--baseline` runs the read-only check in the same call; the result is in `read_only_check`. `--html` writes `dashboard.html` and `explore.html`; omit it for `--no-html`. If the check reports changed files, say so prominently and never hide it.
+`--baseline` runs the read-only check in the same call; the result is in `read_only_check`. `--html` writes `dashboard.html` and `explore.html`; omit it for `--no-html`. `--serve` starts (or reuses) a loopback-only viewer for the report folder and prints its links under `viewer` (`dashboard`, `explore`). The widget's "Explore" and "Open the full dashboard" buttons are then real links that open in the user's browser with one click, with no further chat message. The viewer binds `127.0.0.1` only, serves only this report folder plus a read-only, secret-redacted view of the repository's files, and stops by itself after two idle hours. If `viewer` is `null`, a local server could not start here: say so in one line; the buttons then ask in chat instead. If the check reports changed files, say so prominently and never hide it.
 
 ## Show the results in the chat (generative UI)
 
 If this session has an inline visual tool that renders HTML in the conversation (for example `show_widget` from the `visualize` server on Claude Desktop or claude.ai):
 
 1. Call its setup step (such as `read_me`) first if it has one, without mentioning it.
-2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment with KPI cards, amCharts charts, a severity filter, "Explain ↗" buttons, and "Explore ↗" and "Open the full dashboard ↗" buttons, and it already follows the host widget rules.
+2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment with KPI cards, amCharts charts, a severity filter, "Explain ↗" buttons, and "Explore" and "Open the full dashboard" buttons that open those pages directly, and it already follows the host widget rules.
 3. Do not rebuild, restyle, or trim it. If it is missing or the tool fails, skip this step and say so in one line.
 
-Without such a tool, skip this step. The widget's buttons send messages as if the user typed them. Answer them from `findings.json` and the cited source; they do not lift the analysis-only rule: explain and plan, never edit.
+Without such a tool, skip this step.
 
-- **Dashboard:** open or attach `$OUT/dashboard.html` if the host can; otherwise give its full path.
-- **Explore:** open or attach `$OUT/explore.html` the same way. It is the same findings as an interactive floor plan (wings are directories, rooms are files, tiles are findings) with search, filters, a detail panel, and links to each finding's file and line. To open it on one finding, add `#<ID>` (for example `explore.html#SEC-004`). The dashboard and Explore link to each other.
+The "Explore" and "Open the full dashboard" buttons are links to the viewer and open directly; nothing reaches you when they are clicked. The other buttons send messages as if the user typed them ("Explain finding SEC-004 …", "Make a prioritized fix plan …"). Answer them from `findings.json` and the cited source. They do not lift the analysis-only rule: explain and plan, never edit.
+
+- **Links:** always put the two `viewer` links in your final message as well, so they are one click away in hosts without the widget. To open on one finding, add `#<ID>` (for example `…/explore.html#SEC-004`).
+- **If the user later says a link no longer opens** (the viewer stopped after two idle hours), run `python3 "$S/scripts/serve-reports.py" --root "$ROOT" -o "$OUT"` and give the new links.
+- **No viewer** (`viewer` was `null`): the two buttons send "Open the Explore view …" / "Open the full code review dashboard …" instead. Then open or attach `$OUT/explore.html` or `$OUT/dashboard.html` if the host can; otherwise give the full path.
+- Explore is the same findings as an interactive floor plan (wings are directories, rooms are files, tiles are findings) with search, filters, a detail panel, and links to each finding's file and line. The dashboard and Explore link to each other.
 - Both pages are rendered by the script from `findings.json` only. Never rebuild them by hand, and never add, edit, or invent findings for them.
 
 ## Final message
@@ -163,5 +167,6 @@ Keep it short:
 - Counts by severity and the Confirmed/Potential split.
 - The top 3–5 risks: ID, title, and `file:line`.
 - The report folder's full path, and links to `executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), `explore.html` (interactive floor plan of the findings), and `findings.json`.
+- The two `viewer` links, labelled "Explore" and "Open the full dashboard", when the viewer started.
 - The read-only check and the validation stats (rejected and merged counts).
 - That the repository itself was not touched: the reports live outside it, so there is nothing to commit or ignore.

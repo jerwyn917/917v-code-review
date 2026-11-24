@@ -15,8 +15,11 @@ Outputs (in --out, a folder outside the repository; see _common.default_output_d
   explore.html (the findings as an interactive floor plan)
   --widget PATH also writes the in-chat results widget: an HTML fragment for a
   host's inline visual tool (generative UI in the chat). It is not a report.
+  --serve also starts (or reuses) the loopback-only viewer (serve-reports.py) for the
+  report folder, so the widget's "Explore" and "Open the full dashboard" buttons are
+  real links that open in the browser with one click. Needs --html.
 
-Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o <out> [--html] [--widget W]
+Usage: render-reports.py --root <repo> --findings F --stack S --summary M -o <out> [--html] [--widget W] [--serve]
 """
 
 import argparse
@@ -280,7 +283,7 @@ def logo_data_uri():
         return ""
 
 
-def chat_widget(fdata, stack, common, hl, explore=False):
+def chat_widget(fdata, stack, common, hl, explore=False, viewer=None):
     """In-chat results widget (HTML fragment) for a host's inline visual tool."""
     findings = fdata["findings"]
     totals = fdata["totals"]
@@ -293,6 +296,8 @@ def chat_widget(fdata, stack, common, hl, explore=False):
         "findings": [[f["id"], f["severity"], f["category"], f["title"][:110], f["file"], f["line"], f["status"]]
                      for f in findings],
         "explore": bool(explore),
+        # Direct links for the two buttons, from the loopback viewer. Without them the buttons ask in chat.
+        "urls": {"explore": viewer["explore"], "dashboard": viewer["dashboard"]} if viewer and explore else None,
     }
     top = ", ".join("%d %s" % (sev[s], s.lower()) for s in SEVERITIES if sev.get(s))
     summary = "%s of %s: %d findings (%s), code health %s/100 (%s), with severity and category charts and a " \
@@ -303,7 +308,8 @@ def chat_widget(fdata, stack, common, hl, explore=False):
                                      "widget_json": script_json(payload)})
 
 
-def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None, html=False, widget_path=None):
+def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None, html=False, widget_path=None,
+           viewer=None):
     global LINK_BASE
     LINK_BASE = link_base(root, out_dir)
     findings = fdata["findings"]
@@ -413,7 +419,8 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
                                                           "logo_data_uri": logo_data_uri()})
         # Explore: the same findings as a navigable floor plan. link_base and source_root only build links
         # from a finding to its own file and line; they add no review data.
-        explore = dict(payload, link_base=LINK_BASE, source_root=os.path.abspath(root).replace(os.sep, "/"))
+        explore = dict(payload, link_base=LINK_BASE, source_root=os.path.abspath(root).replace(os.sep, "/"),
+                       viewer=bool(viewer))
         files["explore.html"] = fill("explore.html", {"data_json": script_json(explore),
                                                       "logo_data_uri": logo_data_uri()})
     if out_dir:
@@ -422,7 +429,7 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
             with open(os.path.join(out_dir, name), "w", encoding="utf-8") as fh:
                 fh.write(text.rstrip("\n") + "\n")
     if widget_path:
-        widget = chat_widget(fdata, stack, common, hl, explore=html)
+        widget = chat_widget(fdata, stack, common, hl, explore=html, viewer=viewer)
         os.makedirs(os.path.dirname(os.path.abspath(widget_path)), exist_ok=True)
         with open(widget_path, "w", encoding="utf-8") as fh:
             fh.write(widget.rstrip("\n") + "\n")
@@ -441,6 +448,8 @@ def main():
     ap.add_argument("-o", "--out", required=True)
     ap.add_argument("--html", action="store_true", help="also write dashboard.html (amCharts analytics) and explore.html (interactive floor plan)")
     ap.add_argument("--widget", help="also write the in-chat results widget (HTML fragment) to this path")
+    ap.add_argument("--serve", action="store_true",
+                    help="start or reuse the loopback-only viewer so the widget buttons open the pages directly")
     a = ap.parse_args()
     for path in (a.out, a.widget, a.baseline):
         check_output_path(a.root, path)
@@ -454,10 +463,19 @@ def main():
         spec.loader.exec_module(integrity_mod)
         integ = integrity_mod.verify(a.root, load_json(a.baseline))
         dump_json(integ, os.path.join(os.path.dirname(os.path.abspath(a.baseline)), "integrity.json"))
+    viewer = None
+    if a.serve and a.html:
+        spec = importlib.util.spec_from_file_location("serve_reports", os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), "serve-reports.py"))
+        serve_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(serve_mod)
+        viewer = serve_mod.start(a.root, a.out)        # None when a local server cannot start here
     files, hl = render(a.root, load_json(a.findings), opt(a.stack), opt(a.summary) or {}, opt(a.scope),
-                       integ, a.out, a.html, a.widget)
+                       integ, a.out, a.html, a.widget, viewer)
     written = sorted(os.path.join(a.out, n) for n in files) + ([a.widget] if a.widget else [])
     result = {"written": written, "health": hl}
+    if a.serve:
+        result["viewer"] = viewer and {k: viewer[k] for k in ("dashboard", "explore", "reused", "idle_minutes")}
     if integ is not None:
         result["read_only_check"] = "unchanged" if integ.get("unchanged") else {
             k: integ.get(k, []) for k in ("added", "modified", "deleted")}
