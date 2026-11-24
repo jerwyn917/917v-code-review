@@ -11,7 +11,8 @@ Inputs:
                              (writes integrity.json next to it), saving a separate call
 Outputs (in --out, a folder outside the repository; see _common.default_output_dir):
   executive-summary.md, detailed-findings.md, security-review.md,
-  architecture-review.md, recommendations.md, and dashboard.html (--html)
+  architecture-review.md, recommendations.md, and with --html dashboard.html and
+  explore.html (the findings as an interactive floor plan)
   --widget PATH also writes the in-chat results widget: an HTML fragment for a
   host's inline visual tool (generative UI in the chat). It is not a report.
 
@@ -279,7 +280,7 @@ def logo_data_uri():
         return ""
 
 
-def chat_widget(fdata, stack, common, hl):
+def chat_widget(fdata, stack, common, hl, explore=False):
     """In-chat results widget (HTML fragment) for a host's inline visual tool."""
     findings = fdata["findings"]
     totals = fdata["totals"]
@@ -291,6 +292,7 @@ def chat_widget(fdata, stack, common, hl):
         "files_considered": (stack or {}).get("file_count"),
         "findings": [[f["id"], f["severity"], f["category"], f["title"][:110], f["file"], f["line"], f["status"]]
                      for f in findings],
+        "explore": bool(explore),
     }
     top = ", ".join("%d %s" % (sev[s], s.lower()) for s in SEVERITIES if sev.get(s))
     summary = "%s of %s: %d findings (%s), code health %s/100 (%s), with severity and category charts and a " \
@@ -409,13 +411,18 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
                        files_considered=(stack or {}).get("file_count"), validation=fdata.get("validation") or {})
         files["dashboard.html"] = fill("dashboard.html", {"data_json": script_json(payload),
                                                           "logo_data_uri": logo_data_uri()})
+        # Explore: the same findings as a navigable floor plan. link_base and source_root only build links
+        # from a finding to its own file and line; they add no review data.
+        explore = dict(payload, link_base=LINK_BASE, source_root=os.path.abspath(root).replace(os.sep, "/"))
+        files["explore.html"] = fill("explore.html", {"data_json": script_json(explore),
+                                                      "logo_data_uri": logo_data_uri()})
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
         for name, text in files.items():
             with open(os.path.join(out_dir, name), "w", encoding="utf-8") as fh:
                 fh.write(text.rstrip("\n") + "\n")
     if widget_path:
-        widget = chat_widget(fdata, stack, common, hl)
+        widget = chat_widget(fdata, stack, common, hl, explore=html)
         os.makedirs(os.path.dirname(os.path.abspath(widget_path)), exist_ok=True)
         with open(widget_path, "w", encoding="utf-8") as fh:
             fh.write(widget.rstrip("\n") + "\n")
@@ -432,7 +439,7 @@ def main():
     ap.add_argument("--integrity")
     ap.add_argument("--baseline", help="integrity.py snapshot to verify now (instead of --integrity)")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--html", action="store_true", help="also write dashboard.html (amCharts analytics)")
+    ap.add_argument("--html", action="store_true", help="also write dashboard.html (amCharts analytics) and explore.html (interactive floor plan)")
     ap.add_argument("--widget", help="also write the in-chat results widget (HTML fragment) to this path")
     a = ap.parse_args()
     for path in (a.out, a.widget, a.baseline):

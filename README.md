@@ -6,8 +6,8 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 - **Automatic stack detection** from manifests *and* source usage. A folder name alone never counts as evidence.
 - **Eight specialist agents**: architecture, security, performance, backend, frontend, database, testing, devops. They are selected by the detected stack and have non-overlapping responsibilities.
 - **Validation of every finding against the source**. The file must exist, the line must exist, and the evidence must appear in the file. Wrong line numbers are corrected, unverifiable claims are rejected, duplicates are merged, and secrets are redacted.
-- **Consolidated reports** in a folder **outside your repository** (`~/.917v-code-review/reviews/<repo>-<id>/` by default): executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, and `findings.json`.
-- **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, and "Explain ↗" buttons that send follow-up questions back to Claude.
+- **Consolidated reports** in a folder **outside your repository** (`~/.917v-code-review/reviews/<repo>-<id>/` by default): executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, an **Explore** page that lays the findings out as a navigable floor plan, and `findings.json`.
+- **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, "Explain ↗" buttons that send follow-up questions back to Claude, and buttons that open Explore and the full dashboard.
 - **Analysis only, never touches your repository.** It never edits, formats, or deletes project files, never applies fixes, and writes nothing inside the repository. Reports go to a folder outside it, claimed with a `.917v-code-review` marker, and a folder you own is never overwritten. The scripts refuse any output path inside the repository and run only read-only Git commands, without rewriting `.git/index`. Every file is hashed before and after, and the report states whether anything changed.
 
 ## Commands
@@ -110,6 +110,7 @@ See [`severity-rubric.md`](skills/comprehensive-review/references/severity-rubri
 ├── recommendations.md       strategic themes, then Priority 1/2/3 actions
 ├── scan.md                  quick-scan leads (only from /917v-code-review:scan)
 ├── dashboard.html           interactive dashboard: amCharts 5 analytics, cross-filtering findings list
+├── explore.html             Explore: the findings as an interactive floor plan (pan, zoom, search, filter, inspect)
 ├── findings.json            validated findings, for tooling/CI
 └── .work/                   scratch: stack, signals, agent inputs, raw agent output, integrity proof, chat-widget.html
 ```
@@ -131,9 +132,22 @@ Nothing is written inside the reviewed repository, so `git status` stays clean. 
 
 The page loads amCharts from cdnjs and the fonts from Google Fonts. The review data is inlined and never leaves the page. Offline, every chart falls back to built-in HTML bars, so the dashboard still works. amCharts' free build shows a small amCharts logo in each chart; internal use is fine, while customer-facing or logged-in production use needs a license.
 
+### Explore
+
+`explore.html` shows the same findings as a floor plan you can walk through. It is written next to `dashboard.html`, and the two pages link to each other.
+
+- **Layout.** Wings are directories, rooms are files, and each tile is one finding, colored by severity (a hatched stripe marks a Potential finding). Arrange the plan by **Files**, **Categories**, or **Severity**; the tiles glide to their new rooms.
+- **Navigate.** Drag to pan, scroll or pinch to zoom, click a room's name to zoom to it, and use the minimap when part of the plan is off screen. Zoomed far out, the tiles become a severity heat map.
+- **Find.** Search dims everything that does not match and moves the view to the matches. Filter by severity, category, file, and status.
+- **Inspect.** Click a tile for the detail panel: description, evidence, impact, recommendation, related locations, CWE and OWASP, and the reviewers that reported it. `←` / `→` step through the findings in view, and `Esc` returns to the overview you came from.
+- **Go to the code.** "Open in VS Code" and "Open in Cursor" jump to the file and line, "View file" opens the file, and "Copy location" copies `path:line`. A finding without a file or line says so instead of guessing.
+- **Deep links.** `explore.html#SEC-004` opens on that finding. Each dashboard finding has "Locate in Explore", and each Explore panel has "Show in the dashboard list".
+
+Explore draws only what is in this review's `findings.json`; nothing is sampled, mocked, or added. Animation uses [GSAP](https://gsap.com) 3.13.0 (cdnjs) for the camera and the layout, and [Motion](https://motion.dev) 12.23.24 (the vanilla build of Framer Motion, jsDelivr) for the detail panel. Offline, or with reduced motion turned on, the page works the same without them.
+
 ### In-chat results widget
 
-`render-reports.py --widget <path>` writes `.work/chat-widget.html`, an HTML fragment that follows the inline-widget rules of the 917 Ventures generative-UI skill: fragment only, host theme tokens, no comments, amCharts with an HTML fallback, and `sendPrompt` buttons. The orchestrator passes it unchanged to the host's inline visual tool. In the terminal there is no such tool, and the text summary is shown instead.
+`render-reports.py --widget <path>` writes `.work/chat-widget.html`, an HTML fragment that follows the inline-widget rules of the 917 Ventures generative-UI skill: fragment only, host theme tokens, no comments, amCharts with an HTML fallback, and `sendPrompt` buttons, including "Explore ↗" and "Open the full dashboard ↗". The orchestrator passes it unchanged to the host's inline visual tool. In the terminal there is no such tool, and the text summary is shown instead.
 
 An example report generated from the bundled NestJS fixture is in [`examples/nestjs-orders-api/`](examples/nestjs-orders-api/).
 
@@ -191,7 +205,7 @@ commands/                         the slash commands (review, review-diff, secur
 skills/comprehensive-review/      orchestration skill + references (schema, rubric, ownership, checklists)
 agents/                           the eight specialist reviewers (Read/Grep/Glob only)
 scripts/                          deterministic helpers (stdlib Python)
-templates/                        report templates, dashboard, in-chat widget, 917V logo
+templates/                        report templates, dashboard, Explore page, in-chat widget, 917V logo
 skill-src/SKILL.md                orchestrator for the standalone skill build
 tools/build-skill.py              packages the standalone skill into dist/ (git-ignored)
 tests/                            unit tests, fixtures, expected seeded issues, e2e runner, evaluator

@@ -42,6 +42,14 @@ header.bar .logo { width:150px; height:auto; background:#fff; border-radius:8px;
 header.bar h1 { font-family:var(--font-display); font-size:18px; font-weight:600; margin:0; overflow-wrap:anywhere; }
 header.bar .meta { color:var(--muted); font-size:12px; }
 header.bar .grow { flex:1 1 260px; min-width:0; }
+.nav { display:flex; border:1px solid var(--border); border-radius:999px; padding:3px; gap:2px; background:var(--bg); }
+.nav a, .nav span { font-size:13px; font-weight:600; padding:5px 14px; border-radius:999px; text-decoration:none; color:var(--fg-2); }
+.nav a:hover { color:var(--accent-text); background:var(--accent-soft); }
+.nav .cur { background:var(--accent); color:var(--card); }
+.to-explore { font-size:12px; font-weight:600; color:var(--accent-text); }
+body { animation:enter .3s ease-out; transition:opacity .2s ease-in; }
+body.leaving { opacity:0; }
+@keyframes enter { from { opacity:0; } to { opacity:1; } }
 h2 { font-size:16px; font-weight:700; margin:0; }
 .sub { font-size:12px; color:var(--muted); }
 .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:16px; margin-bottom:24px; }
@@ -90,6 +98,7 @@ footer { font-size:12px; color:var(--muted); display:flex; justify-content:space
 <header class="bar"><div class="in">
   <img class="logo" alt="917Ventures" width="150" height="29" src="{{logo_data_uri}}">
   <div class="grow"><h1 id="title">Code review</h1><div class="meta" id="meta"></div></div>
+  <nav class="nav" aria-label="Review views"><span class="cur" aria-current="page">Dashboard</span><a href="explore.html" id="to-explore" title="Navigate the findings as an interactive floor plan">Explore</a></nav>
   <button id="theme" type="button" aria-label="Switch light or dark theme">Theme</button>
 </div></header>
 <main class="wrap">
@@ -426,6 +435,7 @@ footer { font-size:12px; color:var(--muted); display:flex; justify-content:space
       }
       var refs = [f.cwe, f.owasp].filter(Boolean).join(" · ");
       body.appendChild(el("p", { "class": "sub" }, "Reported by " + (f.reported_by || []).join(", ") + (refs ? " · " + refs : "")));
+      body.appendChild(el("a", { "class": "to-explore", href: "explore.html#" + encodeURIComponent(f.id) }, "Locate in Explore →"));
       d.appendChild(body); list.appendChild(d);
     });
   }
@@ -435,8 +445,25 @@ footer { font-size:12px; color:var(--muted); display:flex; justify-content:space
   fst.addEventListener("input", function () { FILTER.status = this.value; renderList(); });
   $("clear").onclick = function () { for (var k in FILTER) FILTER[k] = ""; setFilter({}); };
 
+  // Leaving for Explore fades out first; coming back (also from the back/forward cache) fades in.
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="explore.html"]');
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    e.preventDefault();
+    document.body.classList.add("leaving");
+    setTimeout(function () { location.href = a.href; }, 190);
+  });
+  window.addEventListener("pageshow", function () { document.body.classList.remove("leaving"); });
+
   drawAll();
   renderList();
+  // dashboard.html#SEC-001 (the link Explore uses) opens that finding in the list.
+  var want = ""; try { want = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
+  if (want && findings.some(function (f) { return f.id === want; })) {
+    FILTER.q = want; $("q").value = want; renderList();
+    var first = $("list").querySelector("details");
+    if (first) { first.open = true; first.scrollIntoView({ block: "center" }); }
+  }
 })();
 </script>
 </body>

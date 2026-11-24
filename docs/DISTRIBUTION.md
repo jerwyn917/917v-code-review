@@ -136,7 +136,7 @@ Prerequisites on each machine: `git` and `python3` 3.8 or newer.
 
 The plugin runs inside each developer's Claude Code session under the organization's existing Claude data policies. It adds:
 - No network calls from the scripts. They are offline and stdlib-only.
-- The dashboard, and the in-chat widget where the host renders one, load amCharts 5 from `cdnjs.cloudflare.com` and fonts from Google Fonts when opened. They send no review data: findings are inlined in the page. Offline they fall back to built-in HTML charts.
+- The dashboard, and the in-chat widget where the host renders one, load amCharts 5 from `cdnjs.cloudflare.com` and fonts from Google Fonts when opened. The Explore page loads GSAP from `cdnjs.cloudflare.com`, Motion from `cdn.jsdelivr.net`, and the same fonts. None of them send review data: findings are inlined in the page. Offline, the charts fall back to built-in HTML bars and Explore works without animation. Explore's "Open in VS Code / Cursor" links contain the repository's absolute path on the machine that ran the review.
 - No MCP servers and no hooks.
 - Never modifies the reviewed repository and writes nothing inside it. Reports go to `~/.917v-code-review/reviews/<repo>-<id>/` (or `--out` / `CODE_REVIEW_OUT_DIR`), claimed with a `.917v-code-review` marker, and a folder it did not create is never overwritten. The scripts reject any output path inside the repository and allow only read-only Git subcommands, run with `GIT_OPTIONAL_LOCKS=0` so `git status` and `git diff` do not rewrite `.git/index`. An integrity hash of every repository file before and after proves it.
 - Online dependency audits only when the developer explicitly authorizes them in the conversation.

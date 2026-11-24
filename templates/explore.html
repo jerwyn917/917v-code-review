@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Review Explore</title>
+<!--
+  917 Ventures Explore view: a floor plan of the review. Wings are directories (or categories / severities),
+  rooms are files, and every tile is one finding from this review's findings.json. Nothing else is drawn.
+  Motion: GSAP 3.13.0 (cdnjs) moves the camera, the rooms and the tiles; Motion 12.23.24 (the vanilla build of
+  Framer Motion, jsDelivr) animates the detail panel. Offline, or with reduced motion, the page works without them.
+  The review data is inlined below and never leaves the page.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+:root {
+  --bg:#FAFBFF; --card:#FFFFFF; --fg:#040815; --fg-2:#323643; --muted:#606471; --border:#D0D5DD;
+  --accent:#407DC3; --accent-text:#3A6DBA; --accent-soft:#EEF4FF; --navy:#142741; --focus:#50A6D8;
+  --warning:#B45309; --warning-bg:#FFF4E0; --code-bg:#F3F4F6;
+  --font-display:"Unbounded","Arial Black",Arial,sans-serif; --font-body:"Montserrat","Segoe UI",Roboto,Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --radius:15px; --radius-sm:8px; --shadow:0 1px 2px rgba(0,0,0,.06); --lift:0 10px 28px rgba(4,8,21,.18);
+  --plan:#F1F5FC; --grid:rgba(64,125,195,.13); --room:#E6EEFB; --wall:rgba(20,39,65,.72); --wing:rgba(255,255,255,.55);
+  --sev-critical:#D92D20; --sev-high:#DB6E4F; --sev-medium:#B45309; --sev-low:#407DC3; --sev-info:#8EA1BD; --sev-on:#FFFFFF;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0B1220; --card:#142741; --fg:#F5F7FB; --fg-2:#DDE3EE; --muted:#A4A6BA; --border:#2A3B57;
+  --accent:#65DDF5; --accent-text:#8CC8F5; --accent-soft:#1B2E4D; --warning:#F5B553; --warning-bg:#3D2A0A; --code-bg:#0F1B33;
+  --lift:0 10px 28px rgba(0,0,0,.5); --plan:#0A111E; --grid:rgba(101,221,245,.08); --room:#0F1D34; --wall:rgba(140,200,245,.5); --wing:rgba(20,39,65,.35);
+  --sev-critical:#F2555A; --sev-high:#F0997B; --sev-medium:#F5C451; --sev-low:#65DDF5; --sev-info:#A4A6BA; --sev-on:#040815; color-scheme:dark } }
+:root[data-theme="dark"] {
+  --bg:#0B1220; --card:#142741; --fg:#F5F7FB; --fg-2:#DDE3EE; --muted:#A4A6BA; --border:#2A3B57;
+  --accent:#65DDF5; --accent-text:#8CC8F5; --accent-soft:#1B2E4D; --warning:#F5B553; --warning-bg:#3D2A0A; --code-bg:#0F1B33;
+  --lift:0 10px 28px rgba(0,0,0,.5); --plan:#0A111E; --grid:rgba(101,221,245,.08); --room:#0F1D34; --wall:rgba(140,200,245,.5); --wing:rgba(20,39,65,.35);
+  --sev-critical:#F2555A; --sev-high:#F0997B; --sev-medium:#F5C451; --sev-low:#65DDF5; --sev-info:#A4A6BA; --sev-on:#040815; color-scheme:dark }
+* { box-sizing:border-box; }
+html, body { height:100%; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 var(--font-body); display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }
+[hidden] { display:none !important; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+:focus-visible { outline:2.5px solid var(--focus); outline-offset:2px; }
+.mono { font-family:var(--font-mono); font-size:12px; overflow-wrap:anywhere; }
+.muted { color:var(--muted); }
+.grow { flex:1 1 0; min-width:0; }
+
+header.bar { flex:none; background:var(--card); box-shadow:0 4px 6px -1px rgba(0,0,0,.1); position:relative; z-index:6; }
+header.bar .in { padding:10px max(16px, env(safe-area-inset-left, 0px)); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+header.bar .logo { width:150px; height:auto; background:#fff; border-radius:8px; padding:4px 8px; display:block; }
+header.bar h1 { font-family:var(--font-display); font-size:17px; font-weight:600; margin:0; overflow-wrap:anywhere; }
+header.bar .meta { color:var(--muted); font-size:12px; }
+header.bar .grow { flex:1 1 240px; }
+.nav { display:flex; border:1px solid var(--border); border-radius:999px; padding:3px; gap:2px; background:var(--bg); }
+.nav a, .nav span { font-size:13px; font-weight:600; padding:5px 14px; border-radius:999px; text-decoration:none; color:var(--fg-2); }
+.nav a:hover { color:var(--accent-text); background:var(--accent-soft); }
+.nav .cur { background:var(--navy); color:#fff; }
+:root[data-theme="dark"] .nav .cur { background:var(--accent); color:#040815; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .nav .cur { background:var(--accent); color:#040815; } }
+
+.btn, select, input[type=search] { font:inherit; font-size:13px; padding:7px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--card); color:var(--fg); }
+.btn { cursor:pointer; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; transition:border-color .15s, background-color .15s, transform .12s; }
+.btn:hover { border-color:var(--accent); }
+.btn:active { transform:scale(.96); }
+.btn[disabled] { opacity:.4; cursor:default; }
+.btn.ic { padding:7px 10px; min-width:34px; justify-content:center; }
+select { max-width:220px; }
+
+.tools { flex:none; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px max(16px, env(safe-area-inset-left, 0px)); border-bottom:1px solid var(--border); background:var(--bg); position:relative; z-index:5; }
+.tools input[type=search] { flex:1 1 220px; min-width:0; max-width:340px; }
+.seg { display:flex; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; background:var(--card); }
+.seg button { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:0; background:none; color:var(--fg-2); cursor:pointer; transition:background-color .2s, color .2s; }
+.seg button + button { border-left:1px solid var(--border); }
+.seg button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent-text); }
+.chips { display:flex; flex-wrap:wrap; gap:6px; }
+.chip { font:inherit; font-size:12px; font-weight:600; padding:5px 10px; border:1px solid var(--border); border-radius:999px; background:var(--card); color:var(--fg-2); cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:border-color .15s, background-color .2s, opacity .2s; }
+.chip i { width:9px; height:9px; border-radius:3px; background:var(--sevc); display:inline-block; }
+.chip[aria-pressed="true"] { border-color:var(--sevc); background:color-mix(in srgb, var(--sevc) 14%, var(--card)); color:var(--fg); }
+.chips.some .chip[aria-pressed="false"] { opacity:.55; }
+.count { font-size:12px; color:var(--muted); margin-left:auto; white-space:nowrap; }
+
+.stage { flex:1 1 0; min-height:0; position:relative; overflow:hidden; }
+.vp { position:absolute; inset:0; overflow:hidden; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+  background-color:var(--plan);
+  background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:var(--gs, 40px) var(--gs, 40px); background-position:var(--gx, 0px) var(--gy, 0px); }
+.vp.grabbing { cursor:grabbing; }
+.world { position:absolute; left:0; top:0; transform-origin:0 0; --inv:1; }
+.box { position:absolute; left:0; top:0; }
+.wing { z-index:0; border:1.5px dashed var(--border); border-radius:20px; background:var(--wing); }
+.room { z-index:1; border:2px solid var(--wall); border-radius:12px; background:var(--room); }
+.room.lit { border-color:var(--accent); box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.bh { position:absolute; left:0; right:0; top:0; display:flex; align-items:center; gap:8px; padding:0 12px; border:0; background:none; color:inherit; font:inherit; cursor:pointer; text-align:left; white-space:nowrap; }
+.wing > .bh { height:44px; color:var(--muted); font-size:calc(11.5px * var(--inv)); font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.room > .bh { height:36px; font-size:calc(12.5px * var(--inv)); font-weight:700; color:var(--fg); }
+.bh .nm { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.bh:hover .nm { color:var(--accent-text); }
+.bh .ct { flex:none; font-size:.85em; font-weight:700; border-radius:999px; padding:0 .6em; background:var(--sevc, var(--border)); color:var(--sev-on); font-variant-numeric:tabular-nums; }
+.wing > .bh .ct { background:none; color:var(--muted); padding:0; }
+
+.tile { position:absolute; left:0; top:0; width:176px; height:66px; padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; z-index:2; }
+.tile.off { visibility:hidden; pointer-events:none; }
+.tin { position:absolute; inset:0; display:block; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:7px 10px 7px 16px; overflow:hidden; box-shadow:var(--shadow);
+  transition:transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s, opacity .3s, filter .3s, border-color .2s, background-color .3s; }
+.tin::before { content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--sevc); }
+.tile.pot .tin::before { background:repeating-linear-gradient(135deg, var(--sevc) 0 4px, transparent 4px 7px); }
+.t1 { display:flex; align-items:baseline; gap:6px; font-family:var(--font-mono); font-size:11px; color:var(--muted); white-space:nowrap; }
+.t1 b { color:var(--fg); font-size:12px; }
+.tt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:11.5px; line-height:1.3; font-weight:600; margin-top:2px; color:var(--fg-2); }
+.tile:hover { z-index:3; }
+.tile:hover .tin, .tile:focus-visible .tin { transform:translateY(-2px) scale(1.035); box-shadow:var(--lift); border-color:var(--sevc); }
+.tile.sel { z-index:4; }
+.tile.sel .tin { transform:scale(1.08); border-color:var(--sevc); box-shadow:0 0 0 3px color-mix(in srgb, var(--sevc) 38%, transparent), var(--lift); }
+.tile.sel::after { content:""; position:absolute; inset:-4px; border-radius:14px; border:2px solid var(--sevc); opacity:0; pointer-events:none; animation:ping .8s ease-out 1; }
+@keyframes ping { from { opacity:.8; transform:scale(1); } to { opacity:0; transform:scale(1.35); } }
+.world.has-sel .tile:not(.sel) .tin { opacity:.55; }
+.world.has-sel .tile.kin:not(.sel) .tin { opacity:.9; }
+.tile.dim .tin, .world.has-sel .tile.dim:not(.sel) .tin { opacity:.14; filter:saturate(.2); }
+.vp.far .tin { background:var(--sevc); border-color:transparent; }
+.vp.far .t1, .vp.far .tt { opacity:0; }
+.vp.far .tile.pot .tin { background:repeating-linear-gradient(135deg, var(--sevc) 0 9px, color-mix(in srgb, var(--sevc) 45%, var(--card)) 9px 16px); }
+.no-gsap .tile { transition:transform .55s cubic-bezier(.6,0,.2,1); }
+.no-gsap .world { transition:transform .5s cubic-bezier(.6,0,.2,1); }
+.no-gsap .vp.grabbing .world { transition:none; }
+
+.empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:24px; color:var(--muted); pointer-events:none; }
+.empty .btn, .empty a { pointer-events:auto; }
+.empty strong { font-family:var(--font-display); font-size:16px; color:var(--fg); font-weight:600; }
+
+.zoom { position:absolute; left:12px; top:12px; display:flex; flex-direction:column; gap:4px; z-index:3; }
+.zoom .btn { box-shadow:var(--lift); }
+.mm { position:absolute; left:12px; bottom:12px; z-index:3; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:6px; box-shadow:var(--shadow); cursor:pointer; touch-action:none; transition:opacity .35s; }
+.mm.idle { opacity:0; pointer-events:none; }
+.mm .in { position:relative; overflow:hidden; border-radius:4px; background:var(--plan); }
+.mm .in > i { position:absolute; border-radius:1.5px; background:var(--sevc); opacity:.6; }
+.mm .view { position:absolute; border:1.5px solid var(--accent); background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:2px; pointer-events:none; }
+.mm .dot { position:absolute; width:8px; height:8px; margin:-4px 0 0 -4px; border-radius:50%; background:var(--fg); box-shadow:0 0 0 2px var(--card); pointer-events:none; }
+.hint { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); z-index:2; font-size:12px; color:var(--muted); background:var(--card); border:1px solid var(--border); border-radius:999px; padding:4px 14px; box-shadow:var(--shadow); pointer-events:none; white-space:nowrap; transition:opacity .5s; max-width:calc(100% - 24px); overflow:hidden; text-overflow:ellipsis; }
+.hint.gone { opacity:0; }
+
+.panel { position:absolute; top:12px; right:12px; bottom:12px; width:min(440px, calc(100% - 24px)); z-index:4; display:flex; flex-direction:column; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--lift); overflow:hidden; }
+.ph { flex:none; display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); }
+.ph .pos { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:64px; text-align:center; }
+.pb { flex:1 1 0; min-height:0; overflow:auto; padding:16px 18px 22px; overscroll-behavior:contain; }
+.pb h2 { font-size:17px; line-height:1.3; margin:4px 0 0; overflow-wrap:anywhere; }
+.pb h3 { font-size:11.5px; margin:18px 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.pb p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--fg-2); }
+.pb pre { margin:0; background:var(--code-bg); padding:10px 12px; border-radius:var(--radius-sm); overflow-x:auto; font:12.5px/1.5 var(--font-mono); border-left:3px solid var(--sevc, var(--border)); }
+.pid { font-family:var(--font-mono); font-size:12px; color:var(--muted); margin-top:12px; }
+.tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.sev { display:inline-block; padding:1px 10px; border-radius:999px; font-size:12px; font-weight:700; color:var(--sev-on); background:var(--sevc); white-space:nowrap; }
+.tag { font-size:12px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:0 9px; white-space:nowrap; }
+.tag.pot { color:var(--warning); border-color:var(--warning); background:var(--warning-bg); }
+.locbox { margin-top:14px; background:var(--accent-soft); border-radius:var(--radius-sm); padding:10px 12px; }
+.locbox .mono { font-size:12.5px; color:var(--fg); font-weight:600; }
+.acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.acts .btn { font-size:12px; padding:4px 10px; }
+.rel { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.rel li { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.rel a { font-size:12px; color:var(--accent-text); font-weight:600; }
+.sib { display:flex; flex-wrap:wrap; gap:6px; }
+.sib .chip { font-family:var(--font-mono); }
+a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
+.no-motion .panel:not([hidden]) { animation:pin .28s cubic-bezier(.2,.8,.2,1); }
+@keyframes pin { from { opacity:0; transform:translateX(32px); } to { opacity:1; transform:none; } }
+
+@media (max-width:760px) {
+  header.bar .in { gap:6px 10px; padding-top:8px; padding-bottom:8px; }
+  header.bar .logo { width:96px; } header.bar h1 { font-size:14px; }
+  header.bar .grow { flex:1 1 100%; order:5; } header.bar .meta { display:none; }
+  header.bar .nav { margin-left:auto; } .nav a, .nav span { font-size:12px; padding:4px 10px; }
+  #theme { font-size:12px; padding:5px 9px; }
+  .tools { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; padding-top:8px; padding-bottom:8px; }
+  .tools > * { flex:none; } .tools input[type=search] { flex:0 0 190px; } .chips { flex-wrap:nowrap; }
+  .panel { top:auto; left:8px; right:8px; bottom:8px; width:auto; height:62%; }
+  .mm, .hint { display:none; }
+  .count { margin-left:0; }
+  @keyframes pin { from { opacity:0; transform:translateY(32px); } to { opacity:1; transform:none; } }
+}
+@media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<header class="bar"><div class="in">
+  <img class="logo" alt="917Ventures" width="150" height="29" src="{{logo_data_uri}}">
+  <div class="grow"><h1 id="title">Explore</h1><div class="meta" id="meta"></div></div>
+  <nav class="nav" aria-label="Review views"><a href="dashboard.html" id="to-dash">Dashboard</a><span class="cur" aria-current="page">Explore</span></nav>
+  <button class="btn" id="theme" type="button" aria-label="Switch light or dark theme">Theme</button>
+</div></header>
+<div class="tools" id="tools">
+  <input type="search" id="q" placeholder="Search ID, title, file, description…  ( / )" aria-label="Search findings">
+  <div class="seg" role="group" aria-label="Arrange the plan by" id="group">
+    <button type="button" data-g="file" aria-pressed="true">Files</button>
+    <button type="button" data-g="category" aria-pressed="false">Categories</button>
+    <button type="button" data-g="severity" aria-pressed="false">Severity</button>
+  </div>
+  <div class="chips" role="group" aria-label="Filter by severity" id="f-sev"></div>
+  <select id="f-cat" aria-label="Filter by category"><option value="">All categories</option></select>
+  <select id="f-file" aria-label="Filter by file"><option value="">All files</option></select>
+  <select id="f-status" aria-label="Filter by status"><option value="">Any status</option></select>
+  <button class="btn" type="button" id="clear">Clear</button>
+  <span class="count" id="count" aria-live="polite"></span>
+</div>
+<main class="stage" id="stage">
+  <div class="vp" id="vp" aria-label="Floor plan of the review findings">
+    <div class="world" id="world"><div id="rooms"></div><div id="tiles"></div></div>
+  </div>
+  <div class="empty" id="empty" hidden><strong id="empty-t"></strong><span id="empty-d"></span><button class="btn" type="button" id="empty-clear">Clear filters</button></div>
+  <div class="zoom" id="zoom">
+    <button class="btn ic" type="button" id="z-in" aria-label="Zoom in">+</button>
+    <button class="btn ic" type="button" id="z-out" aria-label="Zoom out">−</button>
+    <button class="btn ic" type="button" id="z-fit" aria-label="Fit the whole plan" title="Fit the whole plan (0)">⤢</button>
+  </div>
+  <div class="mm" id="mm" aria-hidden="true"><div class="in" id="mm-in"><div class="view" id="mm-view"></div><div class="dot" id="mm-dot" hidden></div></div></div>
+  <div class="hint" id="hint">Drag to pan · scroll to zoom · click a finding · hatched = potential</div>
+  <aside class="panel" id="panel" aria-labelledby="p-title" hidden>
+    <div class="ph">
+      <button class="btn ic" type="button" id="p-prev" aria-label="Previous finding" title="Previous (←)">←</button>
+      <span class="pos" id="p-pos"></span>
+      <button class="btn ic" type="button" id="p-next" aria-label="Next finding" title="Next (→)">→</button>
+      <span class="grow"></span>
+      <button class="btn" type="button" id="p-close" title="Back to the overview (Esc)">Overview ✕</button>
+    </div>
+    <div class="pb" id="p-body"></div>
+  </aside>
+</main>
+<script id="review-data" type="application/json">{{data_json}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@12.23.24/dist/motion.js"></script>
+<script>
+(function () {
+  "use strict";
+  const data = JSON.parse(document.getElementById("review-data").textContent);
+  // The only source of findings: the validated list this review wrote to findings.json.
+  const findings = (data.findings || []).filter(f => f && f.id);
+  const SEV = ["Critical", "High", "Medium", "Low", "Informational"];
+  const SEV_KEY = { Critical: "critical", High: "high", Medium: "medium", Low: "low", Informational: "info" };
+  const SEV_W = { Critical: 8, High: 5, Medium: 3, Low: 1, Informational: 0.5 };
+  const rank = s => { const i = SEV.indexOf(s); return i < 0 ? SEV.length : i; };
+  const sevVar = s => "var(--sev-" + (SEV_KEY[s] || "info") + ")";
+  const $ = id => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const HAS_GSAP = typeof gsap !== "undefined";
+  const MO = typeof Motion !== "undefined" && typeof Motion.animate === "function" ? Motion : null;
+  const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const ANIM = HAS_GSAP && !RM;
+  const root = document.documentElement;
+  if (!HAS_GSAP) root.classList.add("no-gsap");
+  if (!MO || RM) root.classList.add("no-motion");
+
+  function el(tag, attrs, text) {
+    const e = document.createElement(tag);
+    for (const k in (attrs || {})) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  const dirOf = p => { const i = p.lastIndexOf("/"); return i < 0 ? "" : p.slice(0, i); };
+  const baseOf = p => p.slice(p.lastIndexOf("/") + 1);
+  const tail2 = p => p.split("/").slice(-2).join("/");
+  const NOFILE = "No file location";
+  const locText = (file, line, end) => file + (line ? ":" + line + (end && end !== line ? "–" + end : "") : "");
+  const encPath = p => p.split("/").map(encodeURIComponent).join("/");
+  const fileHref = file => (data.link_base != null && file) ? data.link_base + "/" + encPath(file) : null;
+  function editorHref(scheme, file, line) {
+    if (!data.source_root || !file) return null;
+    const abs = String(data.source_root).replace(/\\/g, "/").replace(/\/+$/, "") + "/" + file;
+    return scheme + "://file" + (abs[0] === "/" ? "" : "/") + encodeURI(abs).replace(/#/g, "%23").replace(/\?/g, "%3F") + (line ? ":" + line : "");
+  }
+
+  /* ---------- header ---------- */
+  try { const saved = localStorage.getItem("cr-theme"); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+  $("theme").onclick = () => {
+    const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("cr-theme", next); } catch (e) {}
+  };
+  document.title = "Explore — " + (data.repository || "code review");
+  $("title").textContent = "Explore — " + (data.repository || "code review");
+  $("meta").textContent = [data.review_type, data.scope_description, data.date, data.commit ? "commit " + data.commit : ""].filter(Boolean).join(" · ");
+
+  /* ---------- state ---------- */
+  const STATE = { q: "", group: "file", sev: new Set(), cat: "", file: "", status: "" };
+  let SEL = null, ORDER = [], MATCH = null, LAYOUT = null, savedCam = null, moved = false;
+  const cam = { x: 0, y: 0, k: 1 };
+  const MINK = 0.06, MAXK = 2.2;
+  const TW = 176, TH = 66, G = 10, RP = 12, RH = 36, WP = 16, WH = 44, RG = 16, WG = 28;
+  const vp = $("vp"), world = $("world"), roomsEl = $("rooms"), tilesEl = $("tiles"), panel = $("panel"), pbody = $("p-body");
+  const T = {};          // finding id -> { f, el, x, y, shown, room }
+  const BOX = new Map(); // wing / room key -> element
+
+  /* ---------- tiles: one per finding ---------- */
+  findings.forEach(f => {
+    const b = el("button", { type: "button", "class": "tile off" + (f.status === "Potential" ? " pot" : ""), "data-id": f.id });
+    b.style.setProperty("--sevc", sevVar(f.severity));
+    b.setAttribute("aria-label", [f.id, f.severity, f.title, f.file ? locText(f.file, f.line) : NOFILE].filter(Boolean).join(", "));
+    b.title = (f.title || f.id) + (f.status === "Potential" ? " (potential)" : "");
+    const inn = el("span", { "class": "tin" }), t1 = el("span", { "class": "t1" });
+    t1.appendChild(el("b", null, f.id));
+    if (f.line) t1.appendChild(el("span", null, "line " + f.line));
+    inn.appendChild(t1);
+    inn.appendChild(el("span", { "class": "tt" }, f.title || "Untitled finding"));
+    b.appendChild(inn);
+    b.addEventListener("focus", () => { if (b.matches(":focus-visible")) ensureVisible(f.id); });
+    tilesEl.appendChild(b);
+    T[f.id] = { f: f, el: b, x: 0, y: 0, shown: false, room: null };
+  });
+
+  /* ---------- filters ---------- */
+  const count = key => { const c = {}; findings.forEach(f => { const k = key(f); if (k) c[k] = (c[k] || 0) + 1; }); return c; };
+  const bySev = count(f => f.severity), byCat = count(f => f.category), byFile = count(f => f.file), byStatus = count(f => f.status);
+  const sevBox = $("f-sev");
+  Object.keys(bySev).sort((a, b) => rank(a) - rank(b)).forEach(s => {
+    const c = el("button", { type: "button", "class": "chip", "aria-pressed": "false", "data-sev": s });
+    c.style.setProperty("--sevc", sevVar(s));
+    c.appendChild(el("i")); c.appendChild(document.createTextNode(s + " " + bySev[s]));
+    c.onclick = () => { STATE.sev.has(s) ? STATE.sev.delete(s) : STATE.sev.add(s); pop(c); refresh(); };
+    sevBox.appendChild(c);
+  });
+  function options(sel, counts, order) {
+    Object.keys(counts).sort(order).forEach(k => sel.appendChild(el("option", { value: k }, k + " (" + counts[k] + ")")));
+  }
+  options($("f-cat"), byCat, (a, b) => byCat[b] - byCat[a] || (a < b ? -1 : 1));
+  options($("f-file"), byFile, (a, b) => byFile[b] - byFile[a] || (a < b ? -1 : 1));
+  options($("f-status"), byStatus, (a, b) => (a < b ? -1 : 1));
+  $("f-cat").oninput = e => { STATE.cat = e.target.value; refresh(); };
+  $("f-file").oninput = e => { STATE.file = e.target.value; refresh(); };
+  $("f-status").oninput = e => { STATE.status = e.target.value; refresh(); };
+  $("group").addEventListener("click", e => {
+    const b = e.target.closest("button[data-g]"); if (!b || STATE.group === b.dataset.g) return;
+    STATE.group = b.dataset.g; refresh();
+  });
+  function clearAll() {
+    STATE.sev.clear(); STATE.cat = STATE.file = STATE.status = STATE.q = "";
+    $("q").value = ""; refresh();
+  }
+  $("clear").onclick = clearAll; $("empty-clear").onclick = clearAll;
+  $("q").addEventListener("input", e => { STATE.q = e.target.value.trim(); search(true); });
+  $("q").addEventListener("keydown", e => {
+    if (e.key === "Enter") { const l = navList(); if (l.length) { select(l[0]); e.target.blur(); } }
+  });
+  const pass = f => (!STATE.sev.size || STATE.sev.has(f.severity)) && (!STATE.cat || f.category === STATE.cat) &&
+    (!STATE.file || f.file === STATE.file) && (!STATE.status || f.status === STATE.status);
+  function syncControls() {
+    sevBox.classList.toggle("some", STATE.sev.size > 0);
+    sevBox.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(STATE.sev.has(c.dataset.sev))));
+    $("group").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.g === STATE.group)));
+    $("f-cat").value = STATE.cat; $("f-file").value = STATE.file; $("f-status").value = STATE.status;
+  }
+  function pop(node) { if (MO && !RM) MO.animate(node, { scale: [0.9, 1] }, { type: "spring", stiffness: 500, damping: 18 }); }
+
+  /* ---------- layout: wings -> rooms -> tiles, in world units ---------- */
+  function place(f) {
+    const file = f.file || "";
+    if (STATE.group === "severity") {
+      return { wk: f.severity || "Unrated", wl: f.severity || "Unrated", rk: f.category || "Uncategorised", rl: f.category || "Uncategorised", rt: f.category || "Uncategorised" };
+    }
+    if (STATE.group === "category") {
+      return { wk: f.category || "Uncategorised", wl: f.category || "Uncategorised", rk: file || "\u0000", rl: file ? tail2(file) : "Unlocated", rt: file || NOFILE };
+    }
+    if (!file) return { wk: "\u0000", wl: NOFILE, rk: "\u0000", rl: "Unlocated", rt: NOFILE };
+    const d = dirOf(file);
+    return { wk: d, wl: d ? d + "/" : "(repository root)", rk: file, rl: baseOf(file), rt: file };
+  }
+  function layout(list) {
+    const wings = new Map();
+    list.forEach(f => {
+      const p = place(f);
+      if (!wings.has(p.wk)) wings.set(p.wk, { key: STATE.group + "|" + p.wk, label: p.wl, rooms: new Map(), n: 0, weight: 0, worst: 99 });
+      const w = wings.get(p.wk);
+      if (!w.rooms.has(p.rk)) w.rooms.set(p.rk, { key: STATE.group + "|" + p.wk + "|" + p.rk, label: p.rl, title: p.rt, items: [], weight: 0, worst: 99 });
+      const r = w.rooms.get(p.rk);
+      r.items.push(f); r.weight += SEV_W[f.severity] || 0.5; r.worst = Math.min(r.worst, rank(f.severity));
+      w.n++; w.weight += SEV_W[f.severity] || 0.5; w.worst = Math.min(w.worst, rank(f.severity));
+    });
+    let area = 0, widest = 0;
+    const wingList = Array.from(wings.values());
+    wingList.forEach(w => {
+      w.rooms = Array.from(w.rooms.values());
+      w.rooms.forEach(r => {
+        r.items.sort((a, b) => rank(a.severity) - rank(b.severity) || (a.line || 0) - (b.line || 0) || (a.id < b.id ? -1 : 1));
+        const n = r.items.length;
+        r.cols = Math.min(n, Math.max(1, Math.ceil(Math.sqrt(n * 0.9))));
+        r.w = r.cols * TW + (r.cols - 1) * G + 2 * RP;
+        r.h = RH + Math.ceil(n / r.cols) * (TH + G) - G + RP + 4;
+        area += (r.w + RG) * (r.h + RG); widest = Math.max(widest, r.w);
+      });
+      w.rooms.sort((a, b) => b.h - a.h || b.weight - a.weight || (a.label < b.label ? -1 : 1));
+    });
+    if (STATE.group === "severity") wingList.sort((a, b) => a.worst - b.worst);
+    else wingList.sort((a, b) => b.weight - a.weight || (a.label < b.label ? -1 : 1));
+    function pack(target, wingMax) {              // shelf-pack rooms into wings, then wings into the plan
+      wingList.forEach(w => {
+        let x = 0, y = 0, rowH = 0, maxX = 0;
+        w.rooms.forEach(r => {
+          if (x > 0 && x + r.w > wingMax - 2 * WP) { x = 0; y += rowH + RG; rowH = 0; }
+          r.x = x; r.y = y; x += r.w + RG; rowH = Math.max(rowH, r.h); maxX = Math.max(maxX, x - RG);
+        });
+        w.w = maxX + 2 * WP; w.h = WH + y + rowH + WP;
+      });
+      let x = 0, y = 0, rowH = 0, W = 0;
+      wingList.forEach(w => {
+        if (x > 0 && x + w.w > target) { x = 0; y += rowH + WG; rowH = 0; }
+        w.x = x; w.y = y; x += w.w + WG; rowH = Math.max(rowH, w.h); W = Math.max(W, x - WG);
+      });
+      return { w: W, h: y + rowH };
+    }
+    // Try a few plan widths and keep the one that fills the viewport best (largest zoom that still fits).
+    const vw = Math.max(320, vp.clientWidth), vh = Math.max(240, vp.clientHeight);
+    const base = Math.max(widest + 2 * WP, Math.sqrt(area * 1.4 * vw / vh));
+    let best = null;
+    [0.7, 0.85, 1, 1.2, 1.45, 1.75].forEach(ts => [1, 0.62, 0.45, 0.3].forEach(ws => {
+      const target = base * ts, wingMax = Math.max(widest + 2 * WP, target * ws), d = pack(target, wingMax);
+      const k = Math.min(vw / Math.max(1, d.w), vh / Math.max(1, d.h));
+      if (!best || k > best.k * 1.001) best = { k: k, target: target, wingMax: wingMax };
+    }));
+    const dims = best ? pack(best.target, best.wingMax) : { w: 0, h: 0 };
+    const out = { w: dims.w, h: dims.h, boxes: [], pos: {}, order: [] };
+    wingList.forEach(w => {
+      out.boxes.push({ key: w.key, kind: "wing", x: w.x, y: w.y, w: w.w, h: w.h, label: w.label, title: w.label, n: w.n, worst: w.worst });
+      w.rooms.forEach(r => {
+        const X = w.x + WP + r.x, Y = w.y + WH + r.y;
+        out.boxes.push({ key: r.key, kind: "room", x: X, y: Y, w: r.w, h: r.h, label: r.label, title: r.title, n: r.items.length, worst: r.worst });
+        r.items.forEach((f, i) => {
+          out.pos[f.id] = { x: X + RP + (i % r.cols) * (TW + G), y: Y + RH + Math.floor(i / r.cols) * (TH + G), room: r.key, i: out.order.length };
+          out.order.push(f.id);
+        });
+      });
+    });
+    return out;
+  }
+
+  /* ---------- drawing ---------- */
+  function setBox(node, b, dur, delay) {
+    if (!HAS_GSAP) { node.style.transform = "translate(" + b.x + "px," + b.y + "px)"; node.style.width = b.w + "px"; node.style.height = b.h + "px"; return; }
+    const to = { x: b.x, y: b.y, width: b.w, height: b.h };
+    gsap.killTweensOf(node, "x,y,width,height");   // a delayed older move must never land after this one
+    if (ANIM && dur) gsap.to(node, Object.assign(to, { duration: dur, delay: delay || 0, ease: "power3.inOut" }));
+    else gsap.set(node, to);
+  }
+  function drawBoxes(L, intro) {
+    const seen = new Set();
+    L.boxes.forEach((b, i) => {
+      seen.add(b.key);
+      let node = BOX.get(b.key);
+      const fresh = !node;
+      if (fresh) {
+        node = el("div", { "class": "box " + b.kind });
+        const h = el("button", { type: "button", "class": "bh", tabindex: "-1" });
+        h.appendChild(el("span", { "class": "nm" })); h.appendChild(el("span", { "class": "ct" }));
+        node.appendChild(h); roomsEl.appendChild(node); BOX.set(b.key, node);
+      }
+      node._box = b;
+      node.querySelector(".nm").textContent = b.label;
+      node.querySelector(".ct").textContent = b.kind === "wing" ? "· " + b.n : String(b.n);
+      node.querySelector(".bh").title = b.title + " — " + b.n + (b.n === 1 ? " finding" : " findings") + " (click to zoom here)";
+      node.style.setProperty("--sevc", sevVar(SEV[b.worst]));
+      if (fresh) {
+        setBox(node, b, 0);
+        if (ANIM) gsap.fromTo(node, { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.5, delay: intro ? 0.1 + Math.min(i * 0.025, 0.5) : 0.22, ease: "power2.out" });
+      } else setBox(node, b, 0.65);
+    });
+    BOX.forEach((node, key) => {
+      if (seen.has(key)) return;
+      BOX.delete(key);
+      if (ANIM) gsap.to(node, { opacity: 0, duration: 0.22, overwrite: true, onComplete: () => node.remove() }); else node.remove();
+    });
+  }
+  function setXY(t, x, y, dur, delay) {
+    if (!HAS_GSAP) { t.el.style.transform = "translate(" + x + "px," + y + "px)"; return; }
+    gsap.killTweensOf(t.el, "x,y");
+    if (ANIM && dur) gsap.to(t.el, { x: x, y: y, duration: dur, delay: delay || 0, ease: "power3.inOut" });
+    else gsap.set(t.el, { x: x, y: y });
+  }
+  function drawTiles(L, intro) {
+    const n = L.order.length, step = intro ? Math.min(0.02, 0.9 / Math.max(1, n)) : Math.min(0.004, 0.2 / Math.max(1, n));
+    findings.forEach(f => {
+      const t = T[f.id], p = L.pos[f.id];
+      if (!p) {
+        if (!t.shown) return;
+        t.shown = false;
+        if (HAS_GSAP) gsap.killTweensOf(t.el, "opacity,scale");
+        if (ANIM) gsap.to(t.el, { opacity: 0, scale: 0.4, duration: 0.24, ease: "power2.in", onComplete: () => { if (!t.shown) t.el.classList.add("off"); } });
+        else t.el.classList.add("off");
+        return;
+      }
+      if (!t.shown) {
+        t.shown = true; t.el.classList.remove("off");
+        setXY(t, p.x, p.y, 0);
+        if (HAS_GSAP) gsap.killTweensOf(t.el, "opacity,scale");
+        if (ANIM) gsap.fromTo(t.el, { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.45, delay: (intro ? 0.3 : 0.2) + p.i * step, ease: "back.out(1.6)" });
+        else if (HAS_GSAP) gsap.set(t.el, { opacity: 1, scale: 1 });
+      } else setXY(t, p.x, p.y, 0.68, p.i * step);
+      t.x = p.x; t.y = p.y; t.room = p.room;
+    });
+  }
+  const mm = $("mm"), mmIn = $("mm-in"), mmView = $("mm-view"), mmDot = $("mm-dot");
+  let mmk = 0;
+  function drawMinimap(L) {
+    mm.hidden = !L.order.length;
+    if (!L.order.length) return;
+    mmk = Math.min(170 / L.w, 110 / L.h);
+    mmIn.style.width = Math.round(L.w * mmk) + "px"; mmIn.style.height = Math.round(L.h * mmk) + "px";
+    mmIn.querySelectorAll("i").forEach(n => n.remove());
+    L.boxes.forEach(b => {
+      if (b.kind !== "room") return;
+      const d = el("i");
+      d.style.cssText = "left:" + b.x * mmk + "px;top:" + b.y * mmk + "px;width:" + Math.max(2, b.w * mmk) + "px;height:" + Math.max(2, b.h * mmk) + "px";
+      d.style.setProperty("--sevc", sevVar(SEV[b.worst]));
+      mmIn.insertBefore(d, mmView);
+    });
+  }
+
+  /* ---------- camera ---------- */
+  function applyCam() {
+    world.style.transform = "translate(" + cam.x + "px," + cam.y + "px) scale(" + cam.k + ")";
+    world.style.setProperty("--inv", clamp(1 / cam.k, 1, 2.4).toFixed(3));
+    let step = 40; while (step * cam.k < 18) step *= 5;
+    vp.style.setProperty("--gs", step * cam.k + "px");
+    vp.style.setProperty("--gx", cam.x + "px"); vp.style.setProperty("--gy", cam.y + "px");
+    vp.classList.toggle("far", cam.k < 0.4);
+    if (mmk) {
+      // The minimap earns its corner only while part of the plan is off screen.
+      mm.classList.toggle("idle", cam.x >= -1 && cam.y >= -1 && cam.x + LAYOUT.w * cam.k <= vp.clientWidth + 1 && cam.y + LAYOUT.h * cam.k <= vp.clientHeight + 1);
+      mmView.style.left = (-cam.x / cam.k) * mmk + "px"; mmView.style.top = (-cam.y / cam.k) * mmk + "px";
+      mmView.style.width = (vp.clientWidth / cam.k) * mmk + "px"; mmView.style.height = (vp.clientHeight / cam.k) * mmk + "px";
+      const t = SEL && T[SEL];
+      mmDot.hidden = !t;
+      if (t) { mmDot.style.left = (t.x + TW / 2) * mmk + "px"; mmDot.style.top = (t.y + TH / 2) * mmk + "px"; }
+    }
+  }
+  function freeRect() {                           // the part of the plan the detail panel does not cover
+    const w = vp.clientWidth, h = vp.clientHeight;
+    const gut = w > 760 ? 44 : 0;                 // the zoom buttons' column
+    if (!SEL) return { x: gut, y: 0, w: w - gut, h: h };
+    if (w <= 760) return { x: 0, y: 0, w: w, h: Math.max(120, h - Math.round(h * 0.62) - 16) };
+    return { x: gut, y: 0, w: Math.max(220, w - gut - Math.min(440, w - 24) - 24), h: h };
+  }
+  function fitBox(b, maxK, pad) {
+    const r = freeRect();
+    const k = clamp(Math.min((r.w - 2 * pad) / Math.max(1, b.w), (r.h - 2 * pad) / Math.max(1, b.h)), MINK, maxK);
+    return { k: k, x: r.x + (r.w - b.w * k) / 2 - b.x * k, y: r.y + (r.h - b.h * k) / 2 - b.y * k };
+  }
+  const fitAll = () => fitBox({ x: 0, y: 0, w: LAYOUT.w, h: LAYOUT.h }, 1.15, 56);
+  function flyTo(c, dur) {
+    if (HAS_GSAP) gsap.killTweensOf(cam);
+    if (ANIM && dur) gsap.to(cam, { x: c.x, y: c.y, k: c.k, duration: dur, ease: "power3.inOut", onUpdate: applyCam });
+    else { cam.x = c.x; cam.y = c.y; cam.k = c.k; applyCam(); }
+  }
+  function zoomAt(px, py, factor, dur) {
+    const k = clamp(cam.k * factor, MINK, MAXK), r = k / cam.k;
+    flyTo({ k: k, x: px - (px - cam.x) * r, y: py - (py - cam.y) * r }, dur || 0);
+  }
+  function focusOn(id, dur) {
+    const t = T[id]; if (!t || !t.shown) return;
+    const r = freeRect(), k = clamp(cam.k, 0.95, 1.35);
+    flyTo({ k: k, x: r.x + r.w / 2 - (t.x + TW / 2) * k, y: r.y + r.h / 2 - (t.y + TH / 2) * k }, dur == null ? 0.8 : dur);
+  }
+  function ensureVisible(id) {
+    const t = T[id]; if (!t || !t.shown) return;
+    const r = freeRect(), sx = cam.x + t.x * cam.k, sy = cam.y + t.y * cam.k;
+    if (sx < r.x + 8 || sy < r.y + 8 || sx + TW * cam.k > r.x + r.w - 8 || sy + TH * cam.k > r.y + r.h - 8) {
+      const k = Math.max(cam.k, 0.6);
+      flyTo({ k: k, x: r.x + r.w / 2 - (t.x + TW / 2) * k, y: r.y + r.h / 2 - (t.y + TH / 2) * k }, 0.5);
+    }
+  }
+  const centre = () => ({ x: vp.clientWidth / 2, y: vp.clientHeight / 2 });
+  $("z-in").onclick = () => { const c = centre(); zoomAt(c.x, c.y, 1.4, 0.35); };
+  $("z-out").onclick = () => { const c = centre(); zoomAt(c.x, c.y, 1 / 1.4, 0.35); };
+  $("z-fit").onclick = () => { if (LAYOUT.order.length) flyTo(fitAll(), 0.7); };
+
+  /* ---------- pan, zoom, click ---------- */
+  const P = new Map(); let drag = null, pinch = 0, justDragged = false;
+  const hintOff = () => $("hint").classList.add("gone");
+  vp.addEventListener("pointerdown", e => {
+    if (e.button) return;
+    P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (HAS_GSAP) gsap.killTweensOf(cam);
+    if (P.size === 1) { drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false; }
+    else if (P.size === 2) { const a = Array.from(P.values()); pinch = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); moved = true; }
+  });
+  vp.addEventListener("pointermove", e => {
+    if (!P.has(e.pointerId)) return;
+    P.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (P.size === 2 && pinch) {
+      const a = Array.from(P.values()), d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y), box = vp.getBoundingClientRect();
+      zoomAt((a[0].x + a[1].x) / 2 - box.left, (a[0].y + a[1].y) / 2 - box.top, d / pinch); pinch = d;
+      return;
+    }
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!moved && Math.hypot(dx, dy) < 5) return;
+    if (!moved) { moved = true; vp.classList.add("grabbing"); hintOff(); try { vp.setPointerCapture(e.pointerId); } catch (err) {} }
+    cam.x = drag.cx + dx; cam.y = drag.cy + dy; applyCam();
+  });
+  function pointerEnd(e) {
+    if (!P.has(e.pointerId)) return;
+    P.delete(e.pointerId);
+    if (P.size < 2) pinch = 0;
+    if (P.size === 1) { const a = Array.from(P.values())[0]; drag = { x: a.x, y: a.y, cx: cam.x, cy: cam.y }; }
+    if (P.size === 0) {
+      drag = null; vp.classList.remove("grabbing");
+      if (moved) { justDragged = true; setTimeout(() => { justDragged = false; }, 0); }
+    }
+  }
+  vp.addEventListener("pointerup", pointerEnd); vp.addEventListener("pointercancel", pointerEnd);
+  vp.addEventListener("wheel", e => {
+    e.preventDefault(); hintOff();
+    const box = vp.getBoundingClientRect(), d = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+    zoomAt(e.clientX - box.left, e.clientY - box.top, Math.exp(-d * (e.ctrlKey ? 0.012 : 0.0018)));
+  }, { passive: false });
+  vp.addEventListener("scroll", () => { vp.scrollTop = 0; vp.scrollLeft = 0; });
+  vp.addEventListener("click", e => {
+    if (justDragged) return;
+    const tile = e.target.closest(".tile");
+    if (tile) { hintOff(); select(tile.dataset.id); return; }
+    const head = e.target.closest(".bh");
+    if (head) { const b = head.parentNode._box; if (b) flyTo(fitBox(b, 1.25, 48), 0.7); return; }
+    if (SEL) closeSel();
+  });
+  vp.addEventListener("dblclick", e => {
+    if (e.target.closest(".tile, .bh")) return;
+    const box = vp.getBoundingClientRect(); zoomAt(e.clientX - box.left, e.clientY - box.top, 1.6, 0.35);
+  });
+  function mmJump(e) {
+    const box = mmIn.getBoundingClientRect();
+    const wx = (e.clientX - box.left) / mmk, wy = (e.clientY - box.top) / mmk, r = freeRect();
+    flyTo({ k: cam.k, x: r.x + r.w / 2 - wx * cam.k, y: r.y + r.h / 2 - wy * cam.k }, 0);
+  }
+  mm.addEventListener("pointerdown", e => { mm.setPointerCapture(e.pointerId); mm._on = true; mmJump(e); });
+  mm.addEventListener("pointermove", e => { if (mm._on) mmJump(e); });
+  mm.addEventListener("pointerup", () => { mm._on = false; });
+  window.addEventListener("resize", applyCam);
+
+  /* ---------- search: dim the rest, keep everything in place ---------- */
+  function hay(f) { return [f.id, f.title, f.file, f.description, f.category, f.cwe, f.owasp].filter(Boolean).join(" ").toLowerCase(); }
+  function navList() { return MATCH ? ORDER.filter(id => MATCH.has(id)) : ORDER; }
+  function search(move) {
+    const q = STATE.q.toLowerCase();
+    MATCH = q ? new Set(ORDER.filter(id => hay(T[id].f).indexOf(q) >= 0)) : null;
+    ORDER.forEach(id => T[id].el.classList.toggle("dim", !!MATCH && !MATCH.has(id)));
+    counts();
+    if (SEL) updatePos();
+    if (move && MATCH && MATCH.size && !SEL) {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      MATCH.forEach(id => { const t = T[id]; x0 = Math.min(x0, t.x); y0 = Math.min(y0, t.y); x1 = Math.max(x1, t.x + TW); y1 = Math.max(y1, t.y + TH); });
+      flyTo(fitBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, 1.15, 90), 0.7);
+    }
+  }
+  function counts() {
+    const n = ORDER.length, all = findings.length;
+    let text = n === all ? all + (all === 1 ? " finding" : " findings") : "Showing " + n + " of " + all + " findings";
+    if (MATCH) text += " · " + MATCH.size + (MATCH.size === 1 ? " match" : " matches");
+    $("count").textContent = text;
+    const none = !n || (MATCH && !MATCH.size);
+    $("empty").hidden = !!all && !none;
+    if (!all) {
+      $("empty-clear").hidden = true;
+      $("empty-t").textContent = "No findings to explore";
+      $("empty-d").textContent = "This review recorded no findings, so the plan is empty.";
+    } else if (none) {
+      $("empty-clear").hidden = false;
+      $("empty-t").textContent = n ? "No finding matches “" + STATE.q + "”" : "No findings match these filters";
+      $("empty-d").textContent = n ? "The plan still shows the " + n + " filtered findings, dimmed." : "Remove a filter to bring findings back onto the plan.";
+    }
+  }
+
+  /* ---------- refresh: filters or arrangement changed ---------- */
+  function refresh(intro) {
+    syncControls();
+    LAYOUT = layout(findings.filter(pass));
+    ORDER = LAYOUT.order;
+    drawBoxes(LAYOUT, intro); drawTiles(LAYOUT, intro); drawMinimap(LAYOUT);
+    savedCam = null;
+    search(false);
+    if (SEL && !LAYOUT.pos[SEL]) closeSel(true);
+    markRoom();
+    if (!ORDER.length) { applyCam(); return; }
+    if (intro) {
+      const c = fitAll();
+      if (ANIM) { const s = 0.86; cam.k = c.k * s; cam.x = c.x + LAYOUT.w * c.k * (1 - s) / 2; cam.y = c.y + LAYOUT.h * c.k * (1 - s) / 2; applyCam(); flyTo(c, 1.1); }
+      else flyTo(c, 0);
+    } else if (SEL) { updatePos(); focusOn(SEL, 0.75); }
+    else flyTo(fitAll(), 0.75);
+  }
+
+  /* ---------- selection and the detail panel ---------- */
+  function markRoom() {
+    BOX.forEach(node => node.classList.remove("lit"));
+    ORDER.forEach(id => T[id].el.classList.remove("kin"));
+    const t = SEL && T[SEL]; if (!t) return;
+    const node = BOX.get(t.room); if (node) node.classList.add("lit");
+    ORDER.forEach(id => { if (T[id].room === t.room) T[id].el.classList.add("kin"); });
+  }
+  function updatePos() {
+    const l = navList(), i = l.indexOf(SEL);
+    $("p-pos").textContent = i < 0 ? "— of " + l.length : (i + 1) + " of " + l.length;
+    $("p-prev").disabled = $("p-next").disabled = l.length < 2 && i >= 0;
+  }
+  function step(d) {
+    const l = navList(); if (!l.length) return;
+    const i = l.indexOf(SEL);
+    select(l[i < 0 ? 0 : (i + d + l.length) % l.length]);
+  }
+  $("p-prev").onclick = () => step(-1); $("p-next").onclick = () => step(1); $("p-close").onclick = () => closeSel();
+  function select(id) {
+    const t = T[id]; if (!t || !t.shown) return;
+    const first = !SEL;
+    if (first) savedCam = { x: cam.x, y: cam.y, k: cam.k };    // where "Overview" returns to
+    if (SEL && T[SEL]) T[SEL].el.classList.remove("sel");
+    SEL = id;
+    t.el.classList.add("sel"); world.classList.add("has-sel");
+    markRoom(); buildPanel(t.f); updatePos();
+    panel.hidden = false; pbody.scrollTop = 0;
+    if (MO && !RM) {
+      const sheet = vp.clientWidth <= 760;
+      if (first) MO.animate(panel, sheet ? { y: [48, 0], opacity: [0, 1] } : { x: [48, 0], opacity: [0, 1] }, { type: "spring", stiffness: 320, damping: 32 });
+      MO.animate(pbody.querySelectorAll(".rv"), { opacity: [0, 1], y: [12, 0] }, { delay: MO.stagger(0.04, { startDelay: first ? 0.12 : 0 }), duration: 0.38, ease: [0.22, 1, 0.36, 1] });
+    }
+    focusOn(id);
+    try { history.replaceState(null, "", "#" + encodeURIComponent(id)); } catch (e) {}
+  }
+  function closeSel(stay) {
+    if (!SEL) return;
+    const t = T[SEL];
+    if (t) t.el.classList.remove("sel");
+    SEL = null; world.classList.remove("has-sel"); markRoom();
+    if (MO && !RM) {
+      MO.animate(panel, vp.clientWidth <= 760 ? { y: 48, opacity: 0 } : { x: 48, opacity: 0 }, { duration: 0.2, ease: "easeIn" });
+      setTimeout(() => { if (!SEL) panel.hidden = true; }, 210);
+    } else panel.hidden = true;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    if (!stay && LAYOUT.order.length) flyTo(savedCam || fitAll(), 0.75);
+    savedCam = null;
+    if (t && document.activeElement && panel.contains(document.activeElement)) t.el.focus({ preventScroll: true });
+  }
+  function sect(title, node) { const s = el("section", { "class": "rv" }); s.appendChild(el("h3", null, title)); s.appendChild(node); return s; }
+  function locActions(file, line) {
+    const box = el("div", { "class": "acts" });
+    [["vscode", "Open in VS Code"], ["cursor", "Open in Cursor"]].forEach(e => {
+      const h = editorHref(e[0], file, line); if (h) box.appendChild(el("a", { "class": "btn", href: h }, e[1]));
+    });
+    const fh = fileHref(file);
+    if (fh) box.appendChild(el("a", { "class": "btn", href: fh, target: "_blank", rel: "noopener" }, "View file"));
+    const cp = el("button", { type: "button", "class": "btn" }, "Copy location");
+    cp.onclick = () => {
+      const text = locText(file, line), done = () => { cp.textContent = "Copied"; pop(cp); setTimeout(() => { cp.textContent = "Copy location"; }, 1200); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => {});
+    };
+    box.appendChild(cp);
+    return box;
+  }
+  function buildPanel(f) {
+    pbody.textContent = "";
+    pbody.style.setProperty("--sevc", sevVar(f.severity));
+    const head = el("div", { "class": "rv" }), tags = el("div", { "class": "tags" });
+    if (f.severity) tags.appendChild(el("span", { "class": "sev" }, f.severity));
+    if (f.status) tags.appendChild(el("span", { "class": "tag" + (f.status === "Potential" ? " pot" : "") }, f.status));
+    if (f.confidence) tags.appendChild(el("span", { "class": "tag" }, f.confidence + " confidence"));
+    if (f.category) tags.appendChild(el("span", { "class": "tag" }, f.category));
+    if (f.in_changed_lines) tags.appendChild(el("span", { "class": "tag" }, "On changed lines"));
+    else if (f.in_changed_file) tags.appendChild(el("span", { "class": "tag" }, "In a changed file"));
+    head.appendChild(tags);
+    head.appendChild(el("div", { "class": "pid" }, f.id));
+    head.appendChild(el("h2", { id: "p-title" }, f.title || "Untitled finding"));
+    pbody.appendChild(head);
+
+    const loc = el("div", { "class": "rv locbox" });
+    if (f.file) {
+      loc.appendChild(el("div", { "class": "mono" }, locText(f.file, f.line, f.end_line)));
+      if (!f.line) loc.appendChild(el("div", { "class": "muted" }, "No line number was recorded for this finding."));
+      loc.appendChild(locActions(f.file, f.line));
+    } else loc.appendChild(el("div", { "class": "muted" }, "No file location was recorded for this finding."));
+    pbody.appendChild(loc);
+
+    if (f.description) pbody.appendChild(sect("Description", el("p", null, f.description)));
+    if (f.evidence) pbody.appendChild(sect(f.evidence_type === "absence" ? "Evidence (what is missing)" : "Evidence", el("pre", null, f.evidence)));
+    if (f.impact) pbody.appendChild(sect("Potential impact", el("p", null, f.impact)));
+    if (f.recommendation) pbody.appendChild(sect("Recommended solution", el("p", null, f.recommendation)));
+    const rel = (f.related_locations || []).filter(l => l && l.file);
+    if (rel.length) {
+      const ul = el("ul", { "class": "rel" });
+      rel.forEach(l => {
+        const li = el("li"); li.appendChild(el("span", { "class": "mono" }, locText(l.file, l.line)));
+        const vs = editorHref("vscode", l.file, l.line), fh = fileHref(l.file);
+        if (vs) li.appendChild(el("a", { href: vs }, "VS Code"));
+        if (fh) li.appendChild(el("a", { href: fh, target: "_blank", rel: "noopener" }, "View file"));
+        ul.appendChild(li);
+      });
+      pbody.appendChild(sect("Also at", ul));
+    }
+    const refs = [f.cwe, f.owasp].filter(Boolean), by = (f.reported_by || []).join(", "), also = (f.also_categorised_as || []).join(", ");
+    const lines = [];
+    if (refs.length) lines.push(refs.join(" · "));
+    if (by) lines.push("Reported by " + by);
+    if (also) lines.push("Also categorised as " + also);
+    if (lines.length) pbody.appendChild(sect("Reference", el("p", { "class": "muted" }, lines.join("\n"))));
+    const sibs = f.file ? ORDER.filter(id => id !== f.id && T[id].f.file === f.file) : [];
+    if (sibs.length) {
+      const box = el("div", { "class": "sib" });
+      sibs.forEach(id => {
+        const c = el("button", { type: "button", "class": "chip", title: T[id].f.title || id });
+        c.style.setProperty("--sevc", sevVar(T[id].f.severity));
+        c.appendChild(el("i")); c.appendChild(document.createTextNode(id));
+        c.onclick = () => select(id);
+        box.appendChild(c);
+      });
+      pbody.appendChild(sect("Also in this file", box));
+    }
+    const dash = el("p", { "class": "rv", style: "margin-top:18px" });
+    dash.appendChild(el("a", { "class": "dash", href: "dashboard.html#" + encodeURIComponent(f.id) }, "Show in the dashboard list →"));
+    pbody.appendChild(dash);
+  }
+
+  /* ---------- keyboard ---------- */
+  document.addEventListener("keydown", e => {
+    const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+    if (e.key === "Escape") {
+      if (typing) { e.target.blur(); return; }
+      if (SEL) closeSel(); else if (STATE.q) { STATE.q = ""; $("q").value = ""; search(false); flyTo(fitAll(), 0.6); }
+      return;
+    }
+    if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "/") { e.preventDefault(); $("q").focus(); $("q").select(); }
+    else if (e.key === "ArrowRight" || e.key === "j") { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowLeft" || e.key === "k") { e.preventDefault(); step(-1); }
+    else if (e.key === "0" || e.key === "f") { if (LAYOUT.order.length) flyTo(fitAll(), 0.7); }
+    else if (e.key === "+" || e.key === "=") { const c = centre(); zoomAt(c.x, c.y, 1.4, 0.3); }
+    else if (e.key === "-") { const c = centre(); zoomAt(c.x, c.y, 1 / 1.4, 0.3); }
+  });
+
+  /* ---------- entering and leaving Explore ---------- */
+  document.addEventListener("click", e => {
+    const a = e.target.closest('a[href^="dashboard.html"]');
+    if (!a || !ANIM || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    const href = a.href;
+    gsap.to(document.body, { opacity: 0, duration: 0.22, ease: "power1.in", onComplete: () => { location.href = href; } });
+  });
+  window.addEventListener("pageshow", () => { document.body.style.opacity = ""; });
+  function fromHash() {
+    let id = ""; try { id = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
+    if (id && T[id] && id !== SEL) {
+      if (!T[id].shown) clearAll();
+      select(id);
+    }
+  }
+  window.addEventListener("hashchange", fromHash);
+
+  refresh(true);
+  if (ANIM) {
+    gsap.from("header.bar", { y: -18, opacity: 0, duration: 0.5, ease: "power2.out", clearProps: "all" });
+    gsap.from("#tools", { y: -12, opacity: 0, duration: 0.5, delay: 0.08, ease: "power2.out", clearProps: "all" });
+    gsap.from("#zoom, #mm, #hint", { opacity: 0, duration: 0.5, delay: 0.7, clearProps: "opacity" });
+  }
+  setTimeout(fromHash, ANIM ? 1250 : 0);
+  setTimeout(hintOff, 9000);
+})();
+</script>
+</body>
+</html>

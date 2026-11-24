@@ -463,7 +463,7 @@ class TestValidateAndRender(unittest.TestCase):
             {"title": "Parameterize SQL", "detail": "d", "related": ["SEC-001"]}], "limitations": ["static only"]}
         files, hl = render.render(self.repo, res, detect.detect(self.repo), summary, out_dir=out, html=True)
         for name in ["executive-summary.md", "detailed-findings.md", "security-review.md", "architecture-review.md",
-                     "recommendations.md", "dashboard.html"]:
+                     "recommendations.md", "dashboard.html", "explore.html"]:
             self.assertTrue(os.path.isfile(os.path.join(out, name)), name)
         self.assertIn("SEC-001", files["detailed-findings.md"])
         self.assertIn("| A03 | Injection | SEC-001 |", files["security-review.md"])
@@ -479,6 +479,35 @@ class TestValidateAndRender(unittest.TestCase):
         payload = json.loads(dash.split('type="application/json">')[1].split("</script>")[0])
         self.assertEqual(payload["findings"][0]["id"], "SEC-001")
         self.assertIn("validation", payload)
+        self.assertIn('href="explore.html"', dash)                       # dashboard -> Explore
+        self.assertIn('"explore.html#" + encodeURIComponent(f.id)', dash)
+
+    def test_explore_shows_only_review_findings(self):
+        res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"], "findings": [
+            self.base(owasp="A03:2021", cwe="CWE-89", title="Injection via {{q}} </script><b>x"),
+            self.base(category="Testing", severity="Low", title="No tests for search", status="Potential")]})
+        out = os.path.join(self.tmp_out, "report")
+        files, _ = render.render(self.repo, res, detect.detect(self.repo), {}, out_dir=out, html=True)
+        page = files["explore.html"]
+        raw = page.split('type="application/json">')[1].split("</script>")[0]
+        self.assertNotIn("</script><", raw)
+        data = json.loads(raw)
+        # The page's data is exactly the validated findings: same objects, same order, nothing added.
+        self.assertEqual(data["findings"], res["findings"])
+        self.assertEqual(data["totals"], res["totals"])
+        self.assertEqual(data["link_base"], os.path.relpath(self.repo, out).replace(os.sep, "/"))
+        self.assertEqual(data["source_root"], os.path.abspath(self.repo).replace(os.sep, "/"))
+        self.assertIn("cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js", page)
+        self.assertIn("cdn.jsdelivr.net/npm/motion@12.23.24/dist/motion.js", page)
+        self.assertIn('href="dashboard.html"', page)                     # Explore -> dashboard
+        # The template itself carries no findings: every ID and path on the page comes from the data.
+        with open(os.path.join(ROOT, "templates", "explore.html"), encoding="utf-8") as fh:
+            template = fh.read()
+        self.assertEqual(re.findall(r"\b(?:SEC|ARC|CQ|PERF|API|FE|DB|TEST|OPS)-\d{3}\b", template), [])
+        self.assertEqual(page.count('type="application/json"'), 1)
+        # Without --html there is no Explore page.
+        files, _ = render.render(self.repo, res, detect.detect(self.repo), {}, out_dir=None, html=False)
+        self.assertNotIn("explore.html", files)
 
     def test_chat_widget(self):
         res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"],
@@ -498,6 +527,12 @@ class TestValidateAndRender(unittest.TestCase):
         self.assertEqual(data["total"], 1)
         self.assertEqual(data["findings"][0][0], "SEC-001")
         self.assertIn("{{q}}", data["findings"][0][3])          # placeholder-like text survives fill()
+        self.assertIn('id="v917cr-explore"', text)
+        self.assertIn('id="v917cr-dash"', text)                 # the dashboard button stays
+        self.assertFalse(data["explore"])                       # no --html: no explore.html to open
+        render.render(self.repo, res, detect.detect(self.repo), {}, out_dir=None, html=True, widget_path=widget)
+        text = open(widget, encoding="utf-8").read()
+        self.assertTrue(json.loads(text.split("const DATA = ")[1].split(";\n")[0].replace("<\\/", "</"))["explore"])
         self.assertNotIn("</script><b>", text)                  # cannot break out of the script element
 
     def test_integrity(self):

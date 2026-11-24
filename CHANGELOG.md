@@ -5,6 +5,12 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 ## [Unreleased]
 
 ### Added
+- **Explore**: `render-reports.py --html` now also writes `explore.html`, the review's findings as an interactive floor plan (`templates/explore.html`).
+  - Wings are directories, rooms are files, tiles are findings. Arrange by files, categories, or severity; pan, zoom, minimap; search; filters for severity, category, file, and status.
+  - A detail panel shows every field of the selected finding, with previous/next, "Open in VS Code / Cursor", "View file", and "Copy location". Missing file or line metadata is stated, never invented.
+  - The page draws only the validated findings from `findings.json`. A test checks that its data equals them exactly.
+  - Motion: GSAP 3.13.0 for the camera and layout, Motion 12.23.24 (vanilla Framer Motion) for the panel; the page works offline and with reduced motion.
+  - The results widget has a new "Explore ↗" button next to "Open the full dashboard ↗". The dashboard and Explore link to each other, per finding too (`explore.html#<ID>`, `dashboard.html#<ID>`).
 - Post-install offer: a `SessionStart` hook (`hooks/hooks.json` → `scripts/welcome.py`) runs once after the plugin is installed and has Claude ask, with the AskUserQuestion tool, whether to run a command now (Quick scan, Review my changes, Full review, Not now; security and architecture under Other). The marker lives in `${CLAUDE_PLUGIN_DATA}` (fallback `~/.917v-code-review/`), so it asks once per install. The standalone skill asks the same question when it is invoked with no request.
 - `/917v-code-review:scan`: quick read-only triage that runs only the deterministic scripts (stack detection, pattern leads, import cycles; optional diff selectors) and writes `docs/code-review/scan.md` via the new `scripts/render-scan.py`. No reviewer agents, so results are leads, not findings. The standalone skill gets the same `scan` mode.
 - Dashboard analytics with amCharts 5 (5.21.5, cdnjs) in 917 Ventures branding: health gauge, severity donut, category × severity bars, OWASP Top 10 columns, hotspot files, and a reviewer × severity heatmap. Chart clicks cross-filter the findings list. Light and dark themes; HTML-bar fallback offline.

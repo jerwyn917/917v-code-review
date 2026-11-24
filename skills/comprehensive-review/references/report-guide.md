@@ -49,5 +49,6 @@ Rules:
 | `architecture-review.md` | Architecture overview, structure, dependency analysis, Architecture and Code Quality findings |
 | `recommendations.md` | Strategic recommendations, then actions by priority (1: Critical/High, 2: Medium, 3: Low/Info), positives |
 | `dashboard.html` | Interactive dashboard in 917 Ventures branding: amCharts 5 health gauge, severity donut, category, OWASP, hotspot-file and reviewer-heatmap charts that cross-filter the findings list. Loads amCharts from cdnjs and fonts from Google Fonts; review data never leaves the page; HTML-bar fallback offline |
+| `explore.html` | Explore: the same validated findings as an interactive floor plan. Wings are directories (or categories, or severities), rooms are files, and each tile is one finding. Pan and zoom, search, filter by severity, category, file and status, a detail panel with every field, previous/next, and links to the finding's file and line. Linked both ways with `dashboard.html`; `explore.html#<ID>` opens one finding. Draws only what is in `findings.json`. Loads GSAP from cdnjs and Motion from jsDelivr for animation, and works without them |
 | `.work/chat-widget.html` | In-chat results widget (HTML fragment) for a host's inline visual tool; not a report |
 | `findings.json` | Validated findings for tooling and CI |

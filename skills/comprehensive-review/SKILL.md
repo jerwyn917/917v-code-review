@@ -107,19 +107,23 @@ python3 "$P/scripts/render-reports.py" --root "$ROOT" --findings "$OUT/findings.
   --summary "$WORK/summary.json" [--scope "$WORK/scope.json"] --baseline "$WORK/baseline.json" -o "$OUT" --html --widget "$WORK/chat-widget.html"
 ```
 
-`--baseline` runs the read-only check in the same call; the result is in `read_only_check`. Omit `--html` for `--no-html`. `--widget` writes the in-chat results widget, which is scratch output, not a report. If the check reports changed files, say so prominently. The user may have edited files during the review; never hide it.
+`--baseline` runs the read-only check in the same call; the result is in `read_only_check`. `--html` writes `dashboard.html` and `explore.html`; omit it for `--no-html`. `--widget` writes the in-chat results widget, which is scratch output, not a report. If the check reports changed files, say so prominently. The user may have edited files during the review; never hide it.
 
 ## Show the results in the chat (generative UI)
 
 If this session has an inline visual tool that renders HTML in the conversation (for example `show_widget` from the `visualize` server on Claude Desktop or claude.ai):
 
 1. Call its setup step (such as `read_me`) first if it has one, without mentioning it.
-2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment with KPI cards, amCharts severity and category charts, a severity filter, and the top findings with "Explain ↗" buttons. It already follows the host widget rules.
+2. Read `$WORK/chat-widget.html` and pass its **entire contents, unchanged**, as the widget code, titled `code_review_<repository>` in snake_case. It is a branded 917 Ventures fragment with KPI cards, amCharts severity and category charts, a severity filter, the top findings with "Explain ↗" buttons, and "Explore ↗" and "Open the full dashboard ↗" buttons. It already follows the host widget rules.
 3. Do not rebuild, restyle, or trim it. If the file is missing or the tool fails, skip this step and say so in one line.
 
 Without such a tool, as in the terminal, skip this step.
 
-The widget's buttons send messages as if the user typed them ("Explain finding SEC-004 …", "Make a prioritized fix plan …", "Open the full code review dashboard …"). Answer them from `findings.json` and the cited source. They do not lift the analysis-only rule: explain and plan, never edit. For the dashboard, open or attach `$OUT/dashboard.html` if the host can; otherwise give its full path.
+The widget's buttons send messages as if the user typed them ("Explain finding SEC-004 …", "Make a prioritized fix plan …", "Open the Explore view …", "Open the full code review dashboard …"). Answer them from `findings.json` and the cited source. They do not lift the analysis-only rule: explain and plan, never edit.
+
+- **Dashboard:** open or attach `$OUT/dashboard.html` if the host can; otherwise give its full path.
+- **Explore:** open or attach `$OUT/explore.html` the same way. It is the same findings as an interactive floor plan (wings are directories, rooms are files, tiles are findings) with search, filters, a detail panel, and links to each finding's file and line. To open it on one finding, add `#<ID>` (for example `explore.html#SEC-004`). The dashboard and Explore link to each other.
+- Both pages are rendered by the script from `findings.json` only. Never rebuild them by hand, and never add, edit, or invent findings for them.
 
 ## Final message
 
@@ -127,6 +131,6 @@ Keep it short:
 - The review type and scope, plus the agents run and skipped, with reasons.
 - Counts by severity and the Confirmed/Potential split.
 - The top 3–5 risks: ID, title, and `file:line`.
-- The report folder's full path, and links to `executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), and `findings.json`.
+- The report folder's full path, and links to `executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), `explore.html` (interactive floor plan of the findings), and `findings.json`.
 - The read-only check and the validation stats (rejected and merged counts).
 - That the repository itself was not touched: the reports live outside it, so there is nothing to commit or ignore.

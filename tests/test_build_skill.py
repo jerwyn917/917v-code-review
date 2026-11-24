@@ -27,7 +27,7 @@ class BuildSkillTest(unittest.TestCase):
 
     def test_layout(self):
         for rel in ["SKILL.md", "VERSION", "scripts/render-reports.py", "scripts/_common.py",
-                    "templates/dashboard.html", "templates/chat-widget.html", "templates/assets/917v-logo.datauri",
+                    "templates/dashboard.html", "templates/explore.html", "templates/chat-widget.html", "templates/assets/917v-logo.datauri",
                     "references/finding-schema.md",
                     "references/reviewer-protocol.md", "references/reviewers/security-reviewer.md"]:
             self.assertTrue(os.path.isfile(os.path.join(self.dst, rel)), rel)

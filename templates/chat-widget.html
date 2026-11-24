@@ -45,6 +45,7 @@
 <div style="display:flex; flex-wrap:wrap; gap:8px; margin:1rem 0 0;">
   <button type="button" id="v917cr-more">Show all</button>
   <button type="button" id="v917cr-plan">Plan fixes for Critical and High ↗</button>
+  <button type="button" id="v917cr-explore">Explore ↗</button>
   <button type="button" id="v917cr-dash">Open the full dashboard ↗</button>
 </div>
 </div>
@@ -131,6 +132,8 @@
   }
   $("v917cr-more").addEventListener("click", () => { STATE.all = !STATE.all; renderList(); });
   $("v917cr-plan").addEventListener("click", () => ask("Make a prioritized fix plan for the " + crit + " Critical and High findings from the code review of " + DATA.repo + ", grouped by root cause, without changing any files yet"));
+  if (DATA.explore) $("v917cr-explore").addEventListener("click", () => ask("Open the Explore view of the code review of " + DATA.repo));
+  else $("v917cr-explore").style.display = "none";
   $("v917cr-dash").addEventListener("click", () => ask("Open the full code review dashboard for " + DATA.repo));
 
   function fallback() {
