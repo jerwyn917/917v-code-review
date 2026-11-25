@@ -142,20 +142,36 @@ select { max-width:220px; }
 .ph { flex:none; display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); }
 .ph .pos { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; min-width:64px; text-align:center; }
 .pb { flex:1 1 0; min-height:0; overflow:auto; padding:16px 18px 22px; overscroll-behavior:contain; }
-.pb h2 { font-size:17px; line-height:1.3; margin:4px 0 0; overflow-wrap:anywhere; }
-.pb h3 { font-size:11.5px; margin:18px 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
-.pb p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--fg-2); }
-.pb pre { margin:0; background:var(--code-bg); padding:10px 12px; border-radius:var(--radius-sm); overflow-x:auto; font:12.5px/1.5 var(--font-mono); border-left:3px solid var(--sevc, var(--border)); }
+.pb h2 { font-size:18px; line-height:1.3; margin:0; overflow-wrap:anywhere; }
+.pb .sec { margin-top:22px; }
+.pb .ttl { font-size:11.5px; font-weight:700; margin:14px 0 4px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.sec h3 { font-size:11.5px; font-weight:700; margin:0 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.sec p { margin:0; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--fg-2); }
+.sec p.none, .sec p.gn { color:var(--muted); font-size:12.5px; white-space:normal; }
+.sec p.gn { margin-top:8px; }
+.sec pre { margin:0; background:var(--code-bg); padding:12px 14px; border-radius:var(--radius-sm); overflow-x:auto; font:12.5px/1.55 var(--font-mono); border-left:3px solid var(--sevc, var(--border)); }
+.ev > * + * { margin-top:10px; }
+.refs { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ref { display:inline-flex; align-items:center; font-size:12.5px; font-weight:600; padding:3px 12px; border-radius:999px; border:1px solid var(--border); color:var(--fg-2); text-decoration:none; }
+a.ref { color:var(--accent-text); background:var(--accent-soft); border-color:transparent; }
+a.ref:hover { border-color:var(--accent); }
+a.ref::after { content:"↗"; margin-left:6px; font-size:11px; }
+.gcs { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; }
+.gc { display:grid; gap:2px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; min-width:0; }
+.gc .gl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.gc b { font-size:14px; overflow-wrap:anywhere; }
+.gc .mono { font-family:var(--font-mono); font-size:12px; color:var(--fg-2); }
+.gc .gs { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
 .pid { font-family:var(--font-mono); font-size:12px; color:var(--muted); margin-top:12px; }
 .tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
 .sev { display:inline-block; padding:1px 10px; border-radius:999px; font-size:12px; font-weight:700; color:var(--sev-on); background:var(--sevc); white-space:nowrap; }
 .tag { font-size:12px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:0 9px; white-space:nowrap; }
 .tag.pot { color:var(--warning); border-color:var(--warning); background:var(--warning-bg); }
-.locbox { margin-top:14px; background:var(--accent-soft); border-radius:var(--radius-sm); padding:10px 12px; }
+.locbox { background:var(--accent-soft); border-radius:var(--radius-sm); padding:10px 12px; }
 .locbox .mono { font-size:12.5px; color:var(--fg); font-weight:600; }
 .acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .acts .btn { font-size:12px; padding:4px 10px; }
-.rel { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.rel { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:6px; }
 .rel li { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .rel a { font-size:12px; color:var(--accent-text); font-weight:600; }
 .sib { display:flex; flex-wrap:wrap; gap:6px; }
@@ -639,7 +655,7 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
   window.addEventListener("resize", applyCam);
 
   /* ---------- search: dim the rest, keep everything in place ---------- */
-  function hay(f) { return [f.id, f.title, f.file, f.description, f.category, f.cwe, f.owasp].filter(Boolean).join(" ").toLowerCase(); }
+  function hay(f) { return [f.id, f.title, f.file, f.description, f.category, f.cwe, f.owasp, gitHay(f)].filter(Boolean).join(" ").toLowerCase(); }
   function navList() { return MATCH ? ORDER.filter(id => MATCH.has(id)) : ORDER; }
   function search(move) {
     const q = STATE.q.toLowerCase();
@@ -740,7 +756,83 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
     savedCam = null;
     if (t && document.activeElement && panel.contains(document.activeElement)) t.el.focus({ preventScroll: true });
   }
-  function sect(title, node) { const s = el("section", { "class": "rv" }); s.appendChild(el("h3", null, title)); s.appendChild(node); return s; }
+
+  /* ---------- one finding, always the same sections in the same order ---------- */
+  var LBL = { title: "Title", description: "Description", evidence: "Evidence", impact: "Potential Impact",
+    recommendation: "Recommended Solution", reference: "Reference", git: "Git History" };
+  Object.keys(data.sections || {}).forEach(function (k) { LBL[k] = data.sections[k]; });
+  function refLinks(f) {
+    var out = [], R = data.reference_urls || {}, m, o;
+    if (f.cwe) {
+      m = /^CWE-(\d+)$/i.exec(String(f.cwe).trim());
+      out.push({ label: String(f.cwe).toUpperCase(), url: m && R.cwe ? R.cwe.replace("{id}", m[1]) : null });
+    }
+    if (f.owasp) {
+      m = /^(A\d{2}):2021/i.exec(String(f.owasp).trim());
+      o = m && R.owasp ? R.owasp[m[1].toUpperCase()] : null;
+      out.push({ label: "OWASP " + f.owasp + (o ? " " + o.name : ""), url: o ? o.url : null });
+    }
+    (f.references || []).forEach(function (r) { r = String(r); out.push({ label: r, url: /^https?:\/\//.test(r) ? r : null }); });
+    return out;
+  }
+  function sec(key, node) {
+    var s = el("section", { "class": "sec rv" });
+    s.appendChild(el("h3", null, LBL[key] || key));
+    s.appendChild(node);
+    return s;
+  }
+  function none(text) { return el("p", { "class": "none" }, text); }
+  function gitNode(f) {
+    var g = f.git;
+    if (!g) return null;
+    var box = el("div", { "class": "git" });
+    if (g.status !== "traced") { box.appendChild(none("Not traced: " + (g.reason || "no Git history for these lines") + ".")); return box; }
+    function card(label, c) {
+      var d = el("div", { "class": "gc" });
+      d.appendChild(el("span", { "class": "gl" }, label));
+      d.appendChild(el("b", null, c.author || c.committer || "Unknown author"));
+      d.appendChild(el("span", { "class": "mono", title: c.commit || "" }, (c.short || "unknown commit") + " · " + (c.date || "date unknown")));
+      if (c.summary) d.appendChild(el("span", { "class": "gs" }, c.summary));
+      if (c.committer && c.author && c.committer !== c.author) d.appendChild(el("span", { "class": "gs" }, "Committed by " + c.committer));
+      return d;
+    }
+    var where = f.file + ":" + (g.lines || f.line), row = el("div", { "class": "gcs" });
+    box.appendChild(row);
+    if (g.same) {
+      row.appendChild(card("Introduced by", g.introduced));
+      box.appendChild(el("p", { "class": "gn" }, "No later commit has changed " + where + "."));
+    } else {
+      row.appendChild(card("Original introducer", g.introduced));
+      row.appendChild(card("Latest contributor", g.last_changed));
+      box.appendChild(el("p", { "class": "gn" }, where + " has been changed by " + (g.changes || "several") + " commits; the weakness may date from either of these two."));
+    }
+    if (g.note) box.appendChild(el("p", { "class": "gn" }, "Note: " + g.note + "."));
+    return box;
+  }
+  // Description, Evidence, Potential Impact, Recommended Solution, Reference, then Git History when traced.
+  // `locationNode` is the page's own way to show (and open) the cited file and line.
+  function findingSections(f, locationNode) {
+    var out = [], ev = el("div", { "class": "ev" }), refs = refLinks(f), rb = el("div", { "class": "refs" }), g = gitNode(f);
+    out.push(sec("description", f.description ? el("p", null, f.description) : none("No description was recorded for this finding.")));
+    if (locationNode) ev.appendChild(locationNode);
+    if (f.evidence) ev.appendChild(el("pre", null, f.evidence)); else ev.appendChild(none("No code snippet was recorded for this finding."));
+    if (f.evidence_type === "absence") ev.appendChild(el("p", { "class": "gn" }, "This finding is about something that is missing; the text above says what was looked for."));
+    out.push(sec("evidence", ev));
+    out.push(sec("impact", f.impact ? el("p", null, f.impact) : none("No impact was recorded for this finding.")));
+    out.push(sec("recommendation", f.recommendation ? el("p", null, f.recommendation) : none("No recommendation was recorded for this finding.")));
+    refs.forEach(function (r) {
+      rb.appendChild(r.url ? el("a", { "class": "ref", href: r.url, target: "_blank", rel: "noopener noreferrer" }, r.label) : el("span", { "class": "ref" }, r.label));
+    });
+    if (!refs.length) rb.appendChild(none("No CWE or OWASP reference applies to this finding."));
+    out.push(sec("reference", rb));
+    if (g) out.push(sec("git", g));
+    return out;
+  }
+  function gitHay(f) {
+    var g = f.git || {}, a = g.introduced || {}, b = g.last_changed || {};
+    return [a.author, a.committer, a.commit, b.author, b.committer, b.commit].filter(Boolean).join(" ");
+  }
+  function sect(title, node) { const s = el("section", { "class": "sec rv" }); s.appendChild(el("h3", null, title)); s.appendChild(node); return s; }
   function locActions(file, line, end) {
     const box = el("div", { "class": "acts" });
     [["vscode", "Open in VS Code"], ["cursor", "Open in Cursor"]].forEach(e => {
@@ -768,39 +860,32 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
     else if (f.in_changed_file) tags.appendChild(el("span", { "class": "tag" }, "In a changed file"));
     head.appendChild(tags);
     head.appendChild(el("div", { "class": "pid" }, f.id));
+    head.appendChild(el("div", { "class": "ttl" }, LBL.title));
     head.appendChild(el("h2", { id: "p-title" }, f.title || "Untitled finding"));
     pbody.appendChild(head);
 
-    const loc = el("div", { "class": "rv locbox" });
+    const loc = el("div", { "class": "locbox" });
     if (f.file) {
       loc.appendChild(el("div", { "class": "mono" }, locText(f.file, f.line, f.end_line)));
       if (!f.line) loc.appendChild(el("div", { "class": "muted" }, "No line number was recorded for this finding."));
       loc.appendChild(locActions(f.file, f.line, f.end_line));
     } else loc.appendChild(el("div", { "class": "muted" }, "No file location was recorded for this finding."));
-    pbody.appendChild(loc);
-
-    if (f.description) pbody.appendChild(sect("Description", el("p", null, f.description)));
-    if (f.evidence) pbody.appendChild(sect(f.evidence_type === "absence" ? "Evidence (what is missing)" : "Evidence", el("pre", null, f.evidence)));
-    if (f.impact) pbody.appendChild(sect("Potential impact", el("p", null, f.impact)));
-    if (f.recommendation) pbody.appendChild(sect("Recommended solution", el("p", null, f.recommendation)));
     const rel = (f.related_locations || []).filter(l => l && l.file);
     if (rel.length) {
       const ul = el("ul", { "class": "rel" });
       rel.forEach(l => {
-        const li = el("li"); li.appendChild(el("span", { "class": "mono" }, locText(l.file, l.line)));
+        const li = el("li"); li.appendChild(el("span", { "class": "mono" }, "Also at " + locText(l.file, l.line)));
         const vs = editorHref("vscode", l.file, l.line), fh = fileHref(l.file, l.line);
         if (vs) li.appendChild(el("a", { href: vs }, "VS Code"));
         if (fh) li.appendChild(el("a", { href: fh, target: "_blank", rel: "noopener" }, "View file"));
         ul.appendChild(li);
       });
-      pbody.appendChild(sect("Also at", ul));
+      loc.appendChild(ul);
     }
-    const refs = [f.cwe, f.owasp].filter(Boolean), by = (f.reported_by || []).join(", "), also = (f.also_categorised_as || []).join(", ");
-    const lines = [];
-    if (refs.length) lines.push(refs.join(" · "));
-    if (by) lines.push("Reported by " + by);
-    if (also) lines.push("Also categorised as " + also);
-    if (lines.length) pbody.appendChild(sect("Reference", el("p", { "class": "muted" }, lines.join("\n"))));
+    findingSections(f, loc).forEach(n => pbody.appendChild(n));
+    const by = (f.reported_by || []).join(", "), also = (f.also_categorised_as || []).join(", ");
+    if (by || also) pbody.querySelector(".refs").parentNode.appendChild(
+      el("p", { "class": "gn" }, [by ? "Reported by " + by : "", also ? "Also categorised as " + also : ""].filter(Boolean).join(" · ")));
     const sibs = f.file ? ORDER.filter(id => id !== f.id && T[id].f.file === f.file) : [];
     if (sibs.length) {
       const box = el("div", { "class": "sib" });

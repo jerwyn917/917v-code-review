@@ -81,12 +81,45 @@ button:hover { border-color:var(--accent); }
 :focus-visible { outline:2.5px solid var(--focus); outline-offset:2px; }
 .chips { display:flex; flex-wrap:wrap; gap:6px; }
 .chip { background:var(--accent-soft); color:var(--accent-text); border:1px solid transparent; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:600; }
-.finding { border-top:1px solid var(--border); padding:10px 0; }
-.finding summary { cursor:pointer; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; list-style:none; }
+.finding { --sevc:var(--border); border:1px solid var(--border); border-left:4px solid var(--sevc); border-radius:12px; background:var(--card); margin:0 0 12px; transition:box-shadow .2s, border-color .2s; }
+.finding:hover { box-shadow:0 4px 14px rgba(4,8,21,.08); }
+.finding[open] { box-shadow:0 8px 26px rgba(4,8,21,.12); }
+.finding summary { cursor:pointer; list-style:none; display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:2px 16px; padding:14px 18px; align-items:center; border-radius:12px; }
 .finding summary::-webkit-details-marker { display:none; }
+.f-meta { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.f-lbl { display:none; grid-column:1; margin-top:10px; font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.finding[open] .f-lbl { display:block; }
+.f-title { grid-column:1; font-size:15.5px; font-weight:700; line-height:1.35; margin:6px 0 2px; overflow-wrap:anywhere; }
+.finding[open] .f-title { font-size:18px; margin-top:2px; }
+.f-chev { grid-column:2; grid-row:1 / span 4; width:28px; height:28px; border-radius:50%; display:grid; place-items:center; color:var(--muted); background:var(--bg); transition:transform .2s; font-size:13px; }
+.finding[open] .f-chev { transform:rotate(90deg); }
 .fid, .loc { font-family:var(--font-mono); font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
-.tag { font-size:12px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:0 8px; }
-.body h3 { font-size:12px; margin:12px 0 4px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.fid { color:var(--fg-2); font-weight:600; }
+.tag { font-size:12px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:0 9px; white-space:nowrap; }
+.tag.pot { color:var(--warning); border-color:var(--warning); background:var(--warning-bg); }
+.body { border-top:1px solid var(--border); padding:20px 18px 20px; display:grid; gap:22px; }
+.body .sec { max-width:92ch; min-width:0; }
+.facts { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px 20px; margin:0; background:var(--bg); border-radius:var(--radius-sm); padding:12px 14px; }
+.facts dt { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.facts dd { margin:2px 0 0; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
+.f-foot { display:flex; flex-wrap:wrap; gap:16px; align-items:center; padding-top:14px; border-top:1px solid var(--border); }
+.sec h3 { font-size:11.5px; font-weight:700; margin:0 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.sec p { margin:0; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--fg-2); }
+.sec p.none, .sec p.gn { color:var(--muted); font-size:12.5px; white-space:normal; }
+.sec p.gn { margin-top:8px; }
+.sec pre { margin:0; background:var(--code-bg); padding:12px 14px; border-radius:var(--radius-sm); overflow-x:auto; font:12.5px/1.55 var(--font-mono); border-left:3px solid var(--sevc, var(--border)); }
+.ev > * + * { margin-top:10px; }
+.refs { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ref { display:inline-flex; align-items:center; font-size:12.5px; font-weight:600; padding:3px 12px; border-radius:999px; border:1px solid var(--border); color:var(--fg-2); text-decoration:none; }
+a.ref { color:var(--accent-text); background:var(--accent-soft); border-color:transparent; }
+a.ref:hover { border-color:var(--accent); }
+a.ref::after { content:"↗"; margin-left:6px; font-size:11px; }
+.gcs { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; }
+.gc { display:grid; gap:2px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; min-width:0; }
+.gc .gl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.gc b { font-size:14px; overflow-wrap:anywhere; }
+.gc .mono { font-family:var(--font-mono); font-size:12px; color:var(--fg-2); }
+.gc .gs { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
 pre { background:var(--code-bg); padding:10px 12px; border-radius:var(--radius-sm); overflow-x:auto; font:12.5px/1.5 var(--font-mono); }
 .empty { color:var(--muted); padding:16px 0; }
 footer { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -147,6 +180,7 @@ footer { font-size:12px; color:var(--muted); display:flex; justify-content:space
       <select id="f-cat" aria-label="Filter by category"><option value="">All categories</option></select>
       <select id="f-status" aria-label="Filter by status"><option value="">Confirmed + Potential</option><option>Confirmed</option><option>Potential</option></select>
       <button type="button" id="clear">Clear filters</button>
+      <button type="button" id="toggle-all" aria-pressed="false">Expand all</button>
     </div>
     <div class="chips" id="chips"></div>
     <div id="list"></div>
@@ -399,6 +433,83 @@ footer { font-size:12px; color:var(--muted); display:flex; justify-content:space
       box.appendChild(b);
     });
   }
+
+  /* ---------- one finding, always the same sections in the same order ---------- */
+  var LBL = { title: "Title", description: "Description", evidence: "Evidence", impact: "Potential Impact",
+    recommendation: "Recommended Solution", reference: "Reference", git: "Git History" };
+  Object.keys(data.sections || {}).forEach(function (k) { LBL[k] = data.sections[k]; });
+  function refLinks(f) {
+    var out = [], R = data.reference_urls || {}, m, o;
+    if (f.cwe) {
+      m = /^CWE-(\d+)$/i.exec(String(f.cwe).trim());
+      out.push({ label: String(f.cwe).toUpperCase(), url: m && R.cwe ? R.cwe.replace("{id}", m[1]) : null });
+    }
+    if (f.owasp) {
+      m = /^(A\d{2}):2021/i.exec(String(f.owasp).trim());
+      o = m && R.owasp ? R.owasp[m[1].toUpperCase()] : null;
+      out.push({ label: "OWASP " + f.owasp + (o ? " " + o.name : ""), url: o ? o.url : null });
+    }
+    (f.references || []).forEach(function (r) { r = String(r); out.push({ label: r, url: /^https?:\/\//.test(r) ? r : null }); });
+    return out;
+  }
+  function sec(key, node) {
+    var s = el("section", { "class": "sec rv" });
+    s.appendChild(el("h3", null, LBL[key] || key));
+    s.appendChild(node);
+    return s;
+  }
+  function none(text) { return el("p", { "class": "none" }, text); }
+  function gitNode(f) {
+    var g = f.git;
+    if (!g) return null;
+    var box = el("div", { "class": "git" });
+    if (g.status !== "traced") { box.appendChild(none("Not traced: " + (g.reason || "no Git history for these lines") + ".")); return box; }
+    function card(label, c) {
+      var d = el("div", { "class": "gc" });
+      d.appendChild(el("span", { "class": "gl" }, label));
+      d.appendChild(el("b", null, c.author || c.committer || "Unknown author"));
+      d.appendChild(el("span", { "class": "mono", title: c.commit || "" }, (c.short || "unknown commit") + " · " + (c.date || "date unknown")));
+      if (c.summary) d.appendChild(el("span", { "class": "gs" }, c.summary));
+      if (c.committer && c.author && c.committer !== c.author) d.appendChild(el("span", { "class": "gs" }, "Committed by " + c.committer));
+      return d;
+    }
+    var where = f.file + ":" + (g.lines || f.line), row = el("div", { "class": "gcs" });
+    box.appendChild(row);
+    if (g.same) {
+      row.appendChild(card("Introduced by", g.introduced));
+      box.appendChild(el("p", { "class": "gn" }, "No later commit has changed " + where + "."));
+    } else {
+      row.appendChild(card("Original introducer", g.introduced));
+      row.appendChild(card("Latest contributor", g.last_changed));
+      box.appendChild(el("p", { "class": "gn" }, where + " has been changed by " + (g.changes || "several") + " commits; the weakness may date from either of these two."));
+    }
+    if (g.note) box.appendChild(el("p", { "class": "gn" }, "Note: " + g.note + "."));
+    return box;
+  }
+  // Description, Evidence, Potential Impact, Recommended Solution, Reference, then Git History when traced.
+  // `locationNode` is the page's own way to show (and open) the cited file and line.
+  function findingSections(f, locationNode) {
+    var out = [], ev = el("div", { "class": "ev" }), refs = refLinks(f), rb = el("div", { "class": "refs" }), g = gitNode(f);
+    out.push(sec("description", f.description ? el("p", null, f.description) : none("No description was recorded for this finding.")));
+    if (locationNode) ev.appendChild(locationNode);
+    if (f.evidence) ev.appendChild(el("pre", null, f.evidence)); else ev.appendChild(none("No code snippet was recorded for this finding."));
+    if (f.evidence_type === "absence") ev.appendChild(el("p", { "class": "gn" }, "This finding is about something that is missing; the text above says what was looked for."));
+    out.push(sec("evidence", ev));
+    out.push(sec("impact", f.impact ? el("p", null, f.impact) : none("No impact was recorded for this finding.")));
+    out.push(sec("recommendation", f.recommendation ? el("p", null, f.recommendation) : none("No recommendation was recorded for this finding.")));
+    refs.forEach(function (r) {
+      rb.appendChild(r.url ? el("a", { "class": "ref", href: r.url, target: "_blank", rel: "noopener noreferrer" }, r.label) : el("span", { "class": "ref" }, r.label));
+    });
+    if (!refs.length) rb.appendChild(none("No CWE or OWASP reference applies to this finding."));
+    out.push(sec("reference", rb));
+    if (g) out.push(sec("git", g));
+    return out;
+  }
+  function gitHay(f) {
+    var g = f.git || {}, a = g.introduced || {}, b = g.last_changed || {};
+    return [a.author, a.committer, a.commit, b.author, b.committer, b.commit].filter(Boolean).join(" ");
+  }
+
   function renderList() {
     chips();
     var q = FILTER.q.toLowerCase(), list = $("list");
@@ -410,35 +521,65 @@ footer { font-size:12px; color:var(--muted); display:flex; justify-content:space
       if (FILTER.owasp && String(f.owasp || "").toUpperCase().indexOf(FILTER.owasp) !== 0) return false;
       if (FILTER.agent && (f.reported_by || []).indexOf(FILTER.agent) < 0) return false;
       if (FILTER.file && f.file !== FILTER.file) return false;
-      if (q && [f.id, f.title, f.file, f.description, f.cwe, f.owasp].join(" ").toLowerCase().indexOf(q) < 0) return false;
+      if (q && [f.id, f.title, f.file, f.description, f.cwe, f.owasp, gitHay(f)].join(" ").toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     $("shown").textContent = shown.length + " of " + findings.length + " shown";
     if (!shown.length) { list.appendChild(el("div", { "class": "empty" }, "No findings match these filters.")); return; }
-    shown.forEach(function (f) {
-      var d = el("details", { "class": "finding" }), s = el("summary");
-      var b = el("span", { "class": "sev" }, f.severity); b.style.background = sevColor(f.severity);
-      s.appendChild(b);
-      s.appendChild(el("span", { "class": "fid" }, f.id));
-      s.appendChild(el("strong", null, f.title));
-      s.appendChild(el("span", { "class": "loc" }, f.file + ":" + f.line));
-      s.appendChild(el("span", { "class": "tag" }, f.category));
-      s.appendChild(el("span", { "class": "tag" }, f.status + " · " + f.confidence + " confidence"));
-      d.appendChild(s);
-      var body = el("div", { "class": "body" });
-      [["Description", f.description], ["Evidence", f.evidence, true], ["Potential impact", f.impact], ["Recommended solution", f.recommendation]].forEach(function (p) {
-        body.appendChild(el("h3", null, p[0])); body.appendChild(el(p[2] ? "pre" : "p", null, p[1]));
-      });
-      if (f.related_locations && f.related_locations.length) {
-        body.appendChild(el("h3", null, "Also at"));
-        body.appendChild(el("p", { "class": "loc" }, f.related_locations.map(function (l) { return l.file + ":" + l.line; }).join(", ")));
-      }
-      var refs = [f.cwe, f.owasp].filter(Boolean).join(" · ");
-      body.appendChild(el("p", { "class": "sub" }, "Reported by " + (f.reported_by || []).join(", ") + (refs ? " · " + refs : "")));
-      body.appendChild(el("a", { "class": "to-explore", href: "explore.html#" + encodeURIComponent(f.id) }, "Locate in Explore →"));
-      d.appendChild(body); list.appendChild(d);
-    });
+    shown.forEach(function (f) { list.appendChild(findingCard(f)); });
+    setAll(false);
   }
+  function fact(dl, label, value) {
+    if (!value) return;
+    var d = el("div");
+    d.appendChild(el("dt", null, label)); d.appendChild(el("dd", null, value));
+    dl.appendChild(d);
+  }
+  function findingCard(f) {
+    var d = el("details", { "class": "finding", id: "f-" + f.id }), s = el("summary"), meta = el("div", { "class": "f-meta" });
+    d.style.setProperty("--sevc", sevColor(f.severity));
+    var b = el("span", { "class": "sev" }, f.severity); b.style.background = sevColor(f.severity);
+    meta.appendChild(b);
+    meta.appendChild(el("span", { "class": "fid" }, f.id));
+    if (f.category) meta.appendChild(el("span", { "class": "tag" }, f.category));
+    if (f.status) meta.appendChild(el("span", { "class": "tag" + (f.status === "Potential" ? " pot" : "") }, f.status));
+    s.appendChild(meta);
+    s.appendChild(el("span", { "class": "f-chev", "aria-hidden": "true" }, "▶"));
+    s.appendChild(el("span", { "class": "f-lbl" }, LBL.title));
+    s.appendChild(el("div", { "class": "f-title" }, f.title || "Untitled finding"));
+    s.appendChild(el("div", { "class": "loc" }, f.file ? f.file + (f.line ? ":" + f.line : "") : "No file location recorded"));
+    d.appendChild(s);
+    // The body is built the first time the card opens, so long lists stay fast.
+    d.addEventListener("toggle", function () {
+      if (!d.open || d.querySelector(".body")) return;
+      var body = el("div", { "class": "body" }), dl = el("dl", { "class": "facts" });
+      fact(dl, "Severity", f.severity); fact(dl, "Status", f.status);
+      fact(dl, "Confidence", f.confidence); fact(dl, "Category", f.category + (f.also_categorised_as && f.also_categorised_as.length ? " (also " + f.also_categorised_as.join(", ") + ")" : ""));
+      fact(dl, "Reported by", (f.reported_by || []).join(", "));
+      if ("in_changed_lines" in f) fact(dl, "Diff", f.in_changed_lines ? "On changed lines" : (f.in_changed_file ? "In a changed file" : "Outside the changed files"));
+      body.appendChild(dl);
+      var loc = el("div");
+      loc.appendChild(el("div", { "class": "loc" }, f.file ? f.file + (f.line ? ":" + f.line + (f.end_line && f.end_line !== f.line ? "–" + f.end_line : "") : "") : "No file location was recorded for this finding."));
+      if (f.related_locations && f.related_locations.length) {
+        loc.appendChild(el("div", { "class": "loc" }, "Also at " + f.related_locations.map(function (l) { return l.file + ":" + l.line; }).join(", ")));
+      }
+      findingSections(f, loc).forEach(function (n) { body.appendChild(n); });
+      var foot = el("div", { "class": "f-foot" });
+      foot.appendChild(el("a", { "class": "to-explore", href: "explore.html#" + encodeURIComponent(f.id) }, "Locate in Explore →"));
+      body.appendChild(foot);
+      d.appendChild(body);
+    });
+    return d;
+  }
+  function setAll(open) {
+    var b = $("toggle-all");
+    b.setAttribute("aria-pressed", String(open)); b.textContent = open ? "Collapse all" : "Expand all";
+  }
+  $("toggle-all").onclick = function () {
+    var open = this.getAttribute("aria-pressed") !== "true";
+    Array.prototype.forEach.call($("list").querySelectorAll("details"), function (d) { d.open = open; });
+    setAll(open);
+  };
   $("q").addEventListener("input", function () { FILTER.q = this.value; renderList(); });
   fs.addEventListener("input", function () { FILTER.sev = this.value; renderList(); });
   fc.addEventListener("input", function () { FILTER.cat = this.value; renderList(); });

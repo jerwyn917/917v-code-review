@@ -88,6 +88,7 @@ For a large repository (more than about 1500 files), add: "prioritize the priori
    python3 "$P/scripts/validate-findings.py" --root "$ROOT" [--scope "$WORK/scope.json"] [--merges "$WORK/merges.json"] -o "$OUT/findings.json" "$WORK"/raw/*.json
    ```
    The validator rejects claims whose file, line, or evidence does not exist, fixes drifted lines, enforces the severity rules, redacts secrets, assigns IDs (`SEC-001`, …), and auto-merges only strong duplicates. It never merges on location alone.
+   It also traces every **security** finding to Git, read-only (`git blame`, `git log`): `git.introduced` is the commit where the cited code first appeared (the original introducer) and `git.last_changed` the latest commit that changed it (the latest contributor), each with author, committer, commit hash, date, and subject. `git_attribution` in the output says how many were traced and, when history is unavailable (not a Git repository, untracked file, uncommitted change, shallow clone), why. Report these as they are: never infer or guess an author, commit, or date, and when the two commits differ, name both rather than blaming one.
 3. **Merges.** For each pair in `merge_candidates` that shares a root cause and fix, add an entry to `$WORK/merges.json`, keeping the owner's record:
    ```json
    [{"keep": {"agent": "security-reviewer", "title": "<exact title>"},
@@ -132,7 +133,7 @@ The "Explore" and "Open the full dashboard" buttons are links to the viewer and 
 Keep it short:
 - The review type and scope, plus the agents run and skipped, with reasons.
 - Counts by severity and the Confirmed/Potential split.
-- The top 3–5 risks: ID, title, and `file:line`.
+- The top 3–5 risks: ID, title, and `file:line`. For security findings with `git.status` `traced`, add who introduced the code (author, short commit, date), and the latest contributor when it is a different commit.
 - The report folder's full path, and links to `executive-summary.md`, `detailed-findings.md`, `security-review.md`, `architecture-review.md`, `recommendations.md`, `dashboard.html` (amCharts analytics), `explore.html` (interactive floor plan of the findings), and `findings.json`.
 - The two `viewer` links, labelled "Explore" and "Open the full dashboard", when the viewer started.
 - The read-only check and the validation stats (rejected and merged counts).

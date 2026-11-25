@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import importlib.util
 import datetime
 import os
 import re
@@ -353,7 +354,16 @@ def apply_scope(findings, scope):
         f["in_changed_file"] = rs is not None
 
 
-def run(root, inputs, scope=None, merges=None):
+def git_history():
+    """scripts/git-history.py, loaded by path (its name has a hyphen)."""
+    spec = importlib.util.spec_from_file_location("git_history", os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "git-history.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def run(root, inputs, scope=None, merges=None, history=True):
     root = os.path.abspath(root)
     accepted, rejected, coverage, no_issue = [], [], {}, {}
     known_secrets = set()
@@ -402,6 +412,13 @@ def run(root, inputs, scope=None, merges=None):
                                   if t == c[side]["title"] and c[side]["agent"] in agents), None)
     if scope:
         apply_scope(findings, scope)
+    # Read-only enrichment, after validation: which commits put the cited code of each security finding there.
+    attribution = None
+    if history:
+        try:
+            attribution = git_history().attribute(root, findings)
+        except Exception as e:                      # history is a bonus; it must never fail the review
+            attribution = {"available": False, "reason": "Git history could not be read (%s)" % type(e).__name__}
     by_sev = {s: sum(1 for f in findings if f["severity"] == s) for s in SEVERITIES}
     by_cat = {c: sum(1 for f in findings if f["category"] == c) for c in CATEGORIES}
     by_status = {s: sum(1 for f in findings if f["status"] == s) for s in STATUSES}
@@ -416,6 +433,7 @@ def run(root, inputs, scope=None, merges=None):
                        "merge_candidates": len(candidates)},
         "coverage": coverage,
         "no_issue_areas": no_issue,
+        "git_attribution": attribution,
         "findings": findings,
         "merge_candidates": candidates,
         "rejected": rejected,
@@ -427,11 +445,14 @@ def main():
     ap.add_argument("--root", required=True)
     ap.add_argument("--scope", help="scope.json from diff-scope.py (marks findings on changed lines)")
     ap.add_argument("--merges", help="merges.json: orchestrator decisions [{keep:{agent,title}, merge:{agent,title}, reason}]")
+    ap.add_argument("--no-git-history", action="store_true",
+                    help="do not trace security findings to the commits that introduced the cited code")
     ap.add_argument("-o", "--output", default="-")
     ap.add_argument("inputs", nargs="+")
     a = ap.parse_args()
     result = run(a.root, a.inputs, load_json(a.scope) if a.scope else None,
-                 load_json(a.merges) if a.merges and os.path.exists(a.merges) else None)
+                 load_json(a.merges) if a.merges and os.path.exists(a.merges) else None,
+                 history=not a.no_git_history)
     dump_json(result, check_output_path(a.root, a.output))
     v = result["validation"]
     eprint("validated: %d submitted, %d accepted, %d rejected, %d duplicates merged, %d line corrections -> %d findings"

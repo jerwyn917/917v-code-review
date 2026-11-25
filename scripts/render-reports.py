@@ -98,6 +98,114 @@ def health(findings):
     return {"score": score, "rating": rating}
 
 
+# The six sections every finding is presented with, in this order and with these labels, in every report and page.
+SECTIONS = {"title": "Title", "description": "Description", "evidence": "Evidence", "impact": "Potential Impact",
+            "recommendation": "Recommended Solution", "reference": "Reference", "git": "Git History"}
+CWE_URL = "https://cwe.mitre.org/data/definitions/%s.html"
+OWASP_URL = "https://owasp.org/Top10/%s/"
+OWASP_SLUG = {
+    "A01": "A01_2021-Broken_Access_Control", "A02": "A02_2021-Cryptographic_Failures", "A03": "A03_2021-Injection",
+    "A04": "A04_2021-Insecure_Design", "A05": "A05_2021-Security_Misconfiguration",
+    "A06": "A06_2021-Vulnerable_and_Outdated_Components",
+    "A07": "A07_2021-Identification_and_Authentication_Failures",
+    "A08": "A08_2021-Software_and_Data_Integrity_Failures",
+    "A09": "A09_2021-Security_Logging_and_Monitoring_Failures",
+    "A10": "A10_2021-Server-Side_Request_Forgery_%28SSRF%29",
+}
+
+
+def references(f):
+    """[(label, url or None)] built only from the finding's own cwe / owasp / references fields."""
+    out = []
+    cwe = str(f.get("cwe") or "").strip()
+    m = re.fullmatch(r"CWE-(\d+)", cwe, re.I)
+    if cwe:
+        out.append((cwe.upper() if m else cwe, CWE_URL % m.group(1) if m else None))
+    owasp = str(f.get("owasp") or "").strip()
+    m = re.match(r"(A\d{2}):2021", owasp, re.I)
+    if owasp:
+        code = m.group(1).upper() if m else None
+        name = dict(OWASP).get(code)
+        out.append(("OWASP %s%s" % (owasp, " " + name if name else ""),
+                    OWASP_URL % OWASP_SLUG[code] if code in OWASP_SLUG else None))
+    for r in f.get("references") or []:
+        r = str(r)
+        out.append((r, r if re.match(r"https?://", r) else None))
+    return out
+
+
+def reference_payload():
+    """The same link rules for the HTML pages, so they build exactly the links the reports show."""
+    return {"cwe": CWE_URL.replace("%s", "{id}"),
+            "owasp": {code: {"name": dict(OWASP)[code], "url": OWASP_URL % slug} for code, slug in OWASP_SLUG.items()}}
+
+
+def git_person(c):
+    who = c.get("author") or c.get("committer") or "unknown author"
+    if c.get("committer") and c.get("author") and c["committer"] != c["author"]:
+        who += " (committed by %s)" % c["committer"]
+    return who
+
+
+def git_lines(f):
+    """Markdown lines describing who introduced and who last changed the cited code; [] when not traced."""
+    g = f.get("git")
+    if not g:
+        return []
+    if g.get("status") != "traced":
+        return ["_Not traced: %s._" % (g.get("reason") or "no Git history for these lines")]
+    def one(label, c):
+        return "- **%s:** %s · `%s` · %s — %s" % (label, cell(git_person(c)), c.get("short"), c.get("date") or "date unknown",
+                                               cell(c.get("summary") or ""))
+    where = "`%s:%s`" % (f["file"], g.get("lines") or f["line"])
+    if g.get("same"):
+        out = [one("Introduced by", g["introduced"]), "- No later commit has changed %s." % where]
+    else:
+        out = [one("Original introducer", g["introduced"]), one("Latest contributor", g["last_changed"]),
+               "- %s has been changed by %s commits; the weakness may date from either of the two above." % (
+                   where, g.get("changes") or "several")]
+    if g.get("note"):
+        out.append("- Note: %s." % g["note"])
+    return out
+
+
+def git_table(findings):
+    rows = [f for f in findings if (f.get("git") or {}).get("status") == "traced"]
+    if not rows:
+        return ""
+    out = ["| Finding | Location | Original introducer | Commit | Date | Latest contributor | Commit | Date |",
+           "|---|---|---|---|---|---|---|---|"]
+    for f in rows:
+        g = f["git"]
+        i, l = g["introduced"], g["last_changed"]
+        last = ["same", "", ""] if g.get("same") else [cell(git_person(l)), "`%s`" % l.get("short"), l.get("date") or ""]
+        out.append("| %s | `%s:%s` | %s | `%s` | %s | %s | %s | %s |" % (
+            f["id"], f["file"], g.get("lines") or f["line"], cell(git_person(i)), i.get("short"), i.get("date") or "",
+            last[0], last[1], last[2]))
+    return "\n".join(out)
+
+
+def git_summary(fdata):
+    a = fdata.get("git_attribution")
+    if not a:
+        return "_Git history was not read for this review._"
+    if not a.get("available"):
+        return "_Git history is not available: %s. No commit or author is attributed._" % (a.get("reason") or "unknown")
+    text = "%d of %d security findings were traced to the commits that introduced and last changed the cited code" % (
+        a.get("traced", 0), a.get("security_findings", 0))
+    extra = []
+    if a.get("uncommitted"):
+        extra.append("%d cite code that is not committed yet" % a["uncommitted"])
+    if a.get("untraced"):
+        extra.append("%d could not be traced" % a["untraced"])
+    text += (" (%s)." % "; ".join(extra)) if extra else "."
+    if a.get("shallow"):
+        text += " The clone is shallow, so the oldest commits shown may not be the true origin."
+    return text + " \"Original introducer\" is the commit where the first cited line first appeared; " \
+                  "\"latest contributor\" is the most recent commit that changed any cited line. " \
+                  "They locate the history of the code, not blame: check both commits before drawing conclusions."
+
+
 LINK_BASE = "../.."   # path from the report folder to the repository root; set by render()
 
 
@@ -130,19 +238,24 @@ def finding_block(f):
         ("Status", f["status"]), ("Confidence", f["confidence"]),
         ("Location", link(f) + ("–%s" % f["end_line"] if f.get("end_line", f["line"]) != f["line"] else "")),
         ("Reported by", ", ".join(f.get("reported_by") or []) or "—")]
+    rows.insert(0, (SECTIONS["title"], f["title"]))
     if "in_changed_lines" in f:
         rows.append(("Diff", "on changed lines" if f["in_changed_lines"] else
                      ("in a changed file, outside the changed lines" if f.get("in_changed_file") else
                       "outside the changed files (context)")))
-    refs = [r for r in (f.get("cwe"), f.get("owasp")) if r] + list(f.get("references") or [])
-    if refs:
-        rows.append(("References", ", ".join(str(r) for r in refs)))
+    refs = ", ".join("[%s](%s)" % (label, url) if url else label for label, url in references(f)) or \
+        "_No CWE or OWASP reference applies to this finding._"
     out = ["### %s · %s" % (f["id"], f["title"]), "", "| Field | Value |", "|---|---|"]
     out += ["| %s | %s |" % (k, v if k == "Location" else cell(v)) for k, v in rows]
-    out += ["", "**Description**", "", f["description"], "", "**Evidence**", "", fence(f["evidence"], f["file"]),
-            "", "**Potential impact**", "", f["impact"], "", "**Recommended solution**", "", f["recommendation"], ""]
+    out += ["", "**%s**" % SECTIONS["description"], "", f["description"],
+            "", "**%s**" % SECTIONS["evidence"], "", fence(f["evidence"], f["file"])]
     if f.get("related_locations"):
-        out += ["**Also found at:** " + ", ".join(src_link(l["file"], l["line"]) for l in f["related_locations"]), ""]
+        out += ["", "Also found at: " + ", ".join(src_link(l["file"], l["line"]) for l in f["related_locations"])]
+    out += ["", "**%s**" % SECTIONS["impact"], "", f["impact"],
+            "", "**%s**" % SECTIONS["recommendation"], "", f["recommendation"],
+            "", "**%s**" % SECTIONS["reference"], "", refs, ""]
+    if git_lines(f):
+        out += ["**%s**" % SECTIONS["git"], ""] + git_lines(f) + [""]
     if f.get("validation_notes"):
         out += ["<sub>Validation: %s</sub>" % "; ".join(f["validation_notes"]), ""]
     return "\n".join(out)
@@ -393,6 +506,7 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
             "security_findings": blocks(sec, "No security findings."),
             "other_security_findings": blocks(sec_other, "None."),
             "security_no_issue": no_issue_list(fdata, ["security-reviewer"]),
+            "git_summary": git_summary(fdata), "git_table": git_table(findings),
         })),
         "architecture-review.md": fill("architecture-review.md", dict(common, **{
             "architecture_overview": summary.get("architecture_overview") or "_Not provided._",
@@ -414,7 +528,9 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
     }
     if html:
         payload = dict(common, commit=commit_info(root), totals=totals, health=hl, findings=findings,
-                       files_considered=(stack or {}).get("file_count"), validation=fdata.get("validation") or {})
+                       files_considered=(stack or {}).get("file_count"), validation=fdata.get("validation") or {},
+                       sections=SECTIONS, reference_urls=reference_payload(),
+                       git_attribution=fdata.get("git_attribution"))
         files["dashboard.html"] = fill("dashboard.html", {"data_json": script_json(payload),
                                                           "logo_data_uri": logo_data_uri()})
         # Explore: the same findings as a navigable floor plan. link_base and source_root only build links

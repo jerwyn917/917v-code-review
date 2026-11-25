@@ -53,6 +53,23 @@ Every specialist agent returns **exactly one JSON object** and nothing else, opt
 | `related_locations` | no | Other places with the same problem: `[{"file", "line"}]`. Prefer one finding with related locations over many copies |
 | `evidence_type` | no | `"absence"` for "something is missing" findings (no tests for X, no USER in Dockerfile). Then `evidence` describes what you searched for and `line` points at the most relevant existing line (often 1) |
 
+## Added by the validator, not by reviewers
+
+Reviewers never fill these in. `validate-findings.py` adds `id`, `reported_by`, `evidence_verified`, `validation_notes`, and, for security findings in a Git repository, `git`:
+
+```json
+"git": {
+  "status": "traced",
+  "lines": "42-44",
+  "introduced":   {"commit": "<40 hex>", "short": "a1b2c3d4", "author": "Ana Cruz", "committer": "Ana Cruz", "date": "2025-03-02", "summary": "Add user search"},
+  "last_changed": {"commit": "<40 hex>", "short": "d4e5f6a7", "author": "Ben Reyes", "committer": "GitHub", "date": "2026-01-11", "summary": "Support partial matches"},
+  "same": false,
+  "changes": 2
+}
+```
+
+`introduced` is the oldest commit in the history of the first cited line (`git log -L`); `last_changed` is the most recent commit that changed any cited line (`git blame -w`, so whitespace-only commits do not count). Other statuses are `uncommitted` and `untraced`, each with a `reason`. Do not write a `git` object yourself, and do not name authors or commits in any other field.
+
 ## Must-nots
 
 - No invented paths, lines, APIs, or execution results. If you did not open the file, do not cite it.

@@ -16,6 +16,12 @@
 
 {{security_findings}}
 
+## Git history of the security findings
+
+{{git_summary}}
+
+{{git_table}}
+
 ## Security-relevant findings from other categories
 
 {{other_security_findings}}

@@ -5,6 +5,15 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 ## [Unreleased]
 
 ### Added
+- **Git history and attribution for security findings** (`scripts/git-history.py`, called by `validate-findings.py`). Each security finding gets a `git` object: `introduced` (the commit where the cited code first appeared) and `last_changed` (the latest commit that changed it), each with author, committer, commit hash, date, and subject, plus the traced lines. `git_attribution` summarizes the run. Read-only Git only (`blame` joins the allowlist); nothing is guessed when history is unavailable, untracked, uncommitted, or shallow. `--no-git-history` skips it.
+- **Standard finding sections everywhere**: Title, Description, Evidence, Potential Impact, Recommended Solution, Reference, and Git History when traced, with the same labels in the dashboard, Explore, and the Markdown reports. Reference now links to the CWE entry and the OWASP Top 10 page named by the finding.
+- `security-review.md` has a "Git history of the security findings" table.
+
+### Changed
+- Dashboard findings list redesigned: each finding is a card with a clear header (severity, ID, category, status, title, location) and, when opened, a facts row and the standard sections with consistent spacing and typography. Bodies are built on first open, "Expand all / Collapse all" was added, and search matches author names and commit hashes.
+- Explore's detail panel uses the same sections and labels; the cited location and its "open" actions now sit in Evidence.
+
+### Added (earlier in this release)
 - **One-click Explore and dashboard from the results widget.** The widget's "Explore" and "Open the full dashboard" buttons are now real links that open the pages in the browser directly, with no chat message.
   - `scripts/serve-reports.py` is a loopback-only viewer for one report folder: `127.0.0.1`, a free port, a random token in every URL, `GET` only, auto-stop after two idle hours, reused by later renders.
   - `render-reports.py --serve` starts or reuses it, writes its links into the widget, and prints them under `viewer` for the final message.

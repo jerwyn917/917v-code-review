@@ -53,7 +53,7 @@ OUT_ENV = "CODE_REVIEW_OUT_DIR"   # base folder for reports (default ~/.917v-cod
 MARKER = ".917v-code-review"   # ownership marker inside the output folder
 OWN_OUTPUTS = {MARKER, ".work", "executive-summary.md", "detailed-findings.md", "security-review.md",
                "architecture-review.md", "recommendations.md", "dashboard.html", "explore.html", "findings.json", "scan.md"}
-READ_ONLY_GIT = {"rev-parse", "ls-files", "diff", "merge-base", "status", "log", "show", "cat-file"}
+READ_ONLY_GIT = {"rev-parse", "ls-files", "diff", "merge-base", "status", "log", "show", "cat-file", "blame"}
 EXIT_OUTPUT_CONFLICT = 4
 
 
@@ -121,15 +121,16 @@ def is_git_repo(root):
         return False
 
 
-def git(root, *args):
-    """Run a read-only git command and return stdout (raises on failure)."""
+def git(root, *args, timeout=None):
+    """Run a read-only git command and return stdout (raises on failure or timeout)."""
     i = 0
     while i < len(args) and args[i] == "-c":   # skip leading `-c key=value` config options
         i += 2
     if i >= len(args) or args[i] not in READ_ONLY_GIT:
         raise ReadOnlyViolation("refusing non-read-only git command: git %s" % " ".join(args))
     out = subprocess.run(
-        ["git", "-C", root] + list(args), capture_output=True, text=True, check=False, env=_git_env()
+        ["git", "-C", root] + list(args), capture_output=True, text=True, check=False, env=_git_env(),
+        timeout=timeout, errors="replace",
     )
     if out.returncode != 0:
         raise RuntimeError("git %s failed: %s" % (" ".join(args), out.stderr.strip()))

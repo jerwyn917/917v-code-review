@@ -38,6 +38,7 @@ integrity = load("integrity")
 validate = load("validate-findings")
 render = load("render-reports")
 serve = load("serve-reports")
+history = load("git-history")
 
 
 os.environ[_common.OUT_ENV] = tempfile.mkdtemp(prefix="cr-out-")   # never write to ~ during tests
@@ -483,6 +484,45 @@ class TestValidateAndRender(unittest.TestCase):
         self.assertIn('href="explore.html"', dash)                       # dashboard -> Explore
         self.assertIn('"explore.html#" + encodeURIComponent(f.id)', dash)
 
+    def test_standard_sections_references_and_git_history(self):
+        git_info = {"status": "traced", "lines": "24", "same": False, "changes": 2,
+                    "introduced": {"commit": "a" * 40, "short": "a" * 8, "author": "Ana Cruz", "committer": "Ana Cruz",
+                                   "date": "2025-03-02", "summary": "Add search"},
+                    "last_changed": {"commit": "b" * 40, "short": "b" * 8, "author": "Ben Reyes",
+                                     "committer": "GitHub", "date": "2026-01-11", "summary": "Tweak search"}}
+        res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"], "findings": [
+            self.base(owasp="A03:2021", cwe="CWE-89"),
+            self.base(category="Testing", severity="Low", title="No tests for search", status="Potential")]})
+        self.assertFalse(res["git_attribution"]["available"])          # the fixture copy is not a Git repository
+        self.assertNotIn("git", res["findings"][0])
+        res["findings"][0]["git"] = git_info
+        files, _ = render.render(self.repo, res, detect.detect(self.repo), {}, out_dir=None, html=True)
+        md = files["detailed-findings.md"]
+        sec_block, test_block = md.split("### SEC-001")[1].split("### TEST-001")
+        order = ["| Title | SQL injection in user search |", "**Description**", "**Evidence**", "**Potential Impact**",
+                 "**Recommended Solution**", "**Reference**", "**Git History**"]
+        positions = [sec_block.index(label) for label in order]
+        self.assertEqual(positions, sorted(positions))                 # the same sections, in the same order
+        self.assertIn("[CWE-89](https://cwe.mitre.org/data/definitions/89.html)", sec_block)
+        self.assertIn("[OWASP A03:2021 Injection](https://owasp.org/Top10/A03_2021-Injection/)", sec_block)
+        self.assertIn("**Original introducer:** Ana Cruz · `aaaaaaaa` · 2025-03-02", sec_block)
+        self.assertIn("**Latest contributor:** Ben Reyes (committed by GitHub) · `bbbbbbbb` · 2026-01-11", sec_block)
+        self.assertIn("No CWE or OWASP reference applies", test_block)
+        self.assertNotIn("Git History", test_block)
+        self.assertIn("| SEC-001 | `src/users/users.service.ts:24` | Ana Cruz |", files["security-review.md"])
+        self.assertIn("Git history is not available", files["security-review.md"])
+        for page in ("dashboard.html", "explore.html"):
+            data = json.loads(files[page].split('type="application/json">')[1].split("</script>")[0])
+            self.assertEqual(data["sections"], {"title": "Title", "description": "Description",
+                                                "evidence": "Evidence", "impact": "Potential Impact",
+                                                "recommendation": "Recommended Solution", "reference": "Reference",
+                                                "git": "Git History"})
+            self.assertEqual(data["findings"][0]["git"], git_info)
+            self.assertEqual(data["reference_urls"]["owasp"]["A03"]["url"], "https://owasp.org/Top10/A03_2021-Injection/")
+            for label in ('"Potential Impact"', '"Recommended Solution"', '"Original introducer"',
+                          '"Latest contributor"'):
+                self.assertIn(label, files[page], (page, label))
+
     def test_explore_shows_only_review_findings(self):
         res = self.run_validate({"agent": "security-reviewer", "files_reviewed": ["x"], "findings": [
             self.base(owasp="A03:2021", cwe="CWE-89", title="Injection via {{q}} </script><b>x"),
@@ -548,6 +588,97 @@ class TestValidateAndRender(unittest.TestCase):
         self.assertFalse(r["unchanged"])
         self.assertEqual(r["modified"], ["src/main.ts"])
 
+
+
+class TestGitHistory(unittest.TestCase):
+    """git-history.py: who introduced and who last changed the code a security finding cites."""
+
+    def commit(self, author, committer, date, message):
+        env = dict(os.environ, GIT_AUTHOR_NAME=author, GIT_AUTHOR_EMAIL="a@example.com", GIT_AUTHOR_DATE=date,
+                   GIT_COMMITTER_NAME=committer, GIT_COMMITTER_EMAIL="c@example.com", GIT_COMMITTER_DATE=date)
+        subprocess.run(["git", "-C", self.repo, "add", "-A"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.repo, "commit", "-q", "-m", message], check=True, capture_output=True,
+                       env=env)
+
+    def write(self, rel, text):
+        with open(os.path.join(self.repo, rel), "w") as fh:
+            fh.write(text)
+
+    def setUp(self):
+        self.repo = tempfile.mkdtemp(prefix="cr-git-")
+        subprocess.run(["git", "-C", self.repo, "init", "-q"], check=True, capture_output=True)
+        self.write("users.ts", "export function search(q) {\n  const safe = escape(q);\n"
+                               "  return db.query(SQL, [safe]);\n}\nexport const a = 1;\n")
+        self.commit("Ana Cruz", "Ana Cruz", "2025-03-02T10:00:00+08:00", "Add user search")
+        self.write("users.ts", "export function search(q) {\n  const sql = 'SELECT * FROM users WHERE n = ' + q;\n"
+                               "  return db.query(sql);\n}\nexport const a = 1;\n")
+        self.commit("Ben Reyes", "GitHub", "2026-01-11T09:00:00+08:00", "Support partial matches")
+
+    def tearDown(self):
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def finding(self, **kw):
+        f = dict(id="SEC-001", severity="High", category="Security", title="SQL injection", file="users.ts", line=2,
+                 end_line=3, evidence="x", cwe="CWE-89", owasp="A03:2021")
+        f.update(kw)
+        return f
+
+    def test_introducer_and_latest_contributor(self):
+        f, same, quality = self.finding(), self.finding(line=5, end_line=5), self.finding(category="Code Quality",
+                                                                                         cwe=None, owasp=None)
+        summary = history.attribute(self.repo, [f, same, quality])
+        self.assertEqual((summary["available"], summary["security_findings"], summary["traced"]), (True, 2, 2))
+        g = f["git"]
+        self.assertEqual((g["status"], g["lines"], g["same"], g["changes"]), ("traced", "2-3", False, 2))
+        self.assertEqual((g["introduced"]["author"], g["introduced"]["date"]), ("Ana Cruz", "2025-03-02"))
+        self.assertEqual(g["introduced"]["summary"], "Add user search")
+        self.assertEqual((g["last_changed"]["author"], g["last_changed"]["committer"]), ("Ben Reyes", "GitHub"))
+        self.assertEqual(g["last_changed"]["date"], "2026-01-11")
+        self.assertRegex(g["last_changed"]["commit"], r"^[0-9a-f]{40}$")
+        self.assertTrue(same["git"]["same"])                          # untouched since the first commit
+        self.assertEqual(same["git"]["introduced"]["author"], "Ana Cruz")
+        self.assertNotIn("git", quality)                              # only security findings are traced
+
+    def test_nothing_is_guessed(self):
+        self.write("new.ts", "const key = 1;\n")                      # untracked file
+        self.write("users.ts", open(os.path.join(self.repo, "users.ts")).read().replace("export const a = 1;",
+                                                                                         "export const a = 2;"))
+        untracked, dirty, missing = self.finding(file="new.ts", line=1, end_line=1), \
+            self.finding(line=5, end_line=5), self.finding(evidence_type="absence", line=1, end_line=1)
+        summary = history.attribute(self.repo, [untracked, dirty, missing])
+        self.assertEqual(untracked["git"]["status"], "untraced")
+        self.assertEqual(dirty["git"]["status"], "uncommitted")
+        self.assertNotIn("introduced", dirty["git"])
+        self.assertEqual(missing["git"]["status"], "untraced")
+        self.assertEqual((summary["traced"], summary["uncommitted"], summary["untraced"]), (0, 1, 2))
+        plain = tempfile.mkdtemp(prefix="cr-nogit-")                  # not a repository at all
+        try:
+            f = self.finding()
+            summary = history.attribute(plain, [f])
+            self.assertFalse(summary["available"])
+            self.assertIn("not a Git repository", summary["reason"])
+            self.assertNotIn("git", f)
+        finally:
+            shutil.rmtree(plain)
+
+    def test_only_read_only_git_runs(self):
+        def snapshot():                                   # every file under .git: path, size, mtime
+            out = {}
+            for folder, _, names in os.walk(os.path.join(self.repo, ".git")):
+                for name in names:
+                    st = os.stat(os.path.join(folder, name))
+                    out[os.path.join(folder, name)] = (st.st_size, st.st_mtime_ns)
+            return out
+        head = subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+        before = snapshot()
+        f = self.finding()
+        history.attribute(self.repo, [f])
+        self.assertEqual(f["git"]["status"], "traced")
+        self.assertEqual(before, snapshot())              # blame and log wrote nothing, not even the index
+        self.assertEqual(head, subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], capture_output=True,
+                                              text=True).stdout)
+        with self.assertRaises(SystemExit):
+            _common.git(self.repo, "commit", "-m", "x")
 
 
 class TestViewer(unittest.TestCase):

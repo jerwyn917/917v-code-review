@@ -5,6 +5,7 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 - **Full codebase review**, or a **Git diff review** (uncommitted, staged, branch vs. base, or commit range).
 - **Automatic stack detection** from manifests *and* source usage. A folder name alone never counts as evidence.
 - **Eight specialist agents**: architecture, security, performance, backend, frontend, database, testing, devops. They are selected by the detected stack and have non-overlapping responsibilities.
+- **Git history for security findings.** When the repository has Git history, each security finding is traced to the commit that introduced the cited code and the latest commit that changed it: author, committer, commit hash, date, and the affected file and lines. Nothing is guessed when history is missing.
 - **Validation of every finding against the source**. The file must exist, the line must exist, and the evidence must appear in the file. Wrong line numbers are corrected, unverifiable claims are rejected, duplicates are merged, and secrets are redacted.
 - **Consolidated reports** in a folder **outside your repository** (`~/.917v-code-review/reviews/<repo>-<id>/` by default): executive summary, detailed findings, security review, architecture review, recommendations, an interactive HTML dashboard with amCharts analytics in 917 Ventures branding, an **Explore** page that lays the findings out as a navigable floor plan, and `findings.json`.
 - **Results in the chat.** Where the host can render inline visuals (Claude Desktop, claude.ai), the review ends with a branded results widget in the conversation: KPI cards, severity and category charts, a severity filter, "Explain ↗" buttons that send follow-up questions back to Claude, and **Explore** and **Open the full dashboard** buttons that open those pages in your browser with one click.
@@ -49,6 +50,7 @@ You can also ask in plain words, for example "review this repo" or "do a securit
                                its inputs file in one step, batches its reads, returns JSON
  5. validate-findings.py       verify file/line/evidence, fix line drift, enforce severity rules,
                                auto-merge strong duplicates, redact secrets, assign IDs (SEC-001, ...)
+                               trace security findings to Git: original introducer + latest contributor
       + orchestrator decides cross-agent merge candidates (merges.json, auditable)
       + orchestrator re-reads every Critical/High finding in context (one parallel batch)
  6. render-reports.py          ONE call: read-only integrity check + reports + dashboard + Explore + chat widget + viewer links
@@ -116,6 +118,34 @@ See [`severity-rubric.md`](skills/comprehensive-review/references/severity-rubri
 ```
 
 Nothing is written inside the reviewed repository, so `git status` stays clean. `<id>` is derived from the repository's path, so each repository keeps its own folder, and each run replaces that folder's previous reports. Override the location with `--out <dir>` (any folder outside the repository) or the `CODE_REVIEW_OUT_DIR` environment variable, which sets the base folder. Source links in the reports are relative paths back to the repository, so they work on the machine that ran the review.
+
+### How a finding is presented
+
+Every finding is shown the same way everywhere: in the dashboard's findings list, in Explore's detail panel, and in the Markdown reports.
+
+| Section | What it holds |
+|---|---|
+| **Title** | Clear, concise name of the defect |
+| **Description** | What is wrong and how it occurs |
+| **Evidence** | The cited file and lines, and the code snippet that shows the issue |
+| **Potential Impact** | What happens if it is exploited or left alone |
+| **Recommended Solution** | Actionable remediation steps |
+| **Reference** | Links to the CWE entry and the OWASP Top 10 page named by the finding; says so when none applies |
+| **Git History** | Security findings only: original introducer and latest contributor |
+
+In the dashboard each finding is a card: severity, ID, category, status, title, and location when closed; a facts row and the sections above when opened. "Expand all" opens every card, and search also matches author names and commit hashes.
+
+### Git history and attribution
+
+For each security finding (category Security, marked security-relevant, or carrying a CWE or OWASP reference), `validate-findings.py` asks Git where the cited lines came from:
+
+- **Original introducer**: the oldest commit in the history of the first cited line (`git log -L`), that is, the commit where that code first appeared.
+- **Latest contributor**: the most recent commit that changed any cited line (`git blame -w`, so whitespace-only commits do not count).
+- For each: author, committer when different (for example a squash merge committed by GitHub), full and short commit hash, commit date, and subject. When one commit is both, it is shown once as "Introduced by".
+
+The result is the `git` object on the finding in `findings.json`, the **Git History** section of the finding, and a table in `security-review.md`.
+
+Limits worth knowing: the commit that first added a line is not always the one that made it vulnerable, which is why both commits are shown and neither is called the culprit. Findings about something missing, untracked files, and uncommitted changes are reported as not traced, with the reason. In a shallow clone the oldest commit shown may not be the true origin, and the report says so. Without Git, no author or commit appears anywhere. Only read-only Git commands run. Pass `--no-git-history` to `validate-findings.py` to skip this step, and `git-history.py --root <repo> --findings findings.json` adds it to an existing `findings.json`.
 
 ### Dashboard analytics
 
