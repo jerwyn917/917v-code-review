@@ -15,15 +15,15 @@ A Claude Code plugin that runs the **917Ventures standardized code review** on a
 
 | Command | What it does |
 |---|---|
-| `/917v-code-review:review [path]` | Full codebase review with every relevant agent |
-| `/917v-code-review:review-diff [--staged \| --branch <base> \| --range a..b]` | Review only changed code. Default: uncommitted changes, including untracked files |
-| `/917v-code-review:security [path]` | Security-focused review (OWASP Top 10, injection, XSS, authn/authz, secrets, config, infrastructure security) |
-| `/917v-code-review:architecture [path]` | Architecture and code quality (SOLID, DRY, layering, circular dependencies, modularity) |
-| `/917v-code-review:scan [path] [--staged \| --branch <base> \| --range a..b]` | Quick triage in seconds: stack, pattern-based risk leads, import cycles. No agents and no validation, so it reports leads, not findings. Writes `scan.md` outside the repository |
+| `/917v-code-review:review [path \| GitHub link]` | Full codebase review with every relevant agent |
+| `/917v-code-review:review-diff [--staged \| --branch <base> \| --range a..b \| GitHub pull request link]` | Review only changed code. Default: uncommitted changes, including untracked files |
+| `/917v-code-review:security [path \| GitHub link]` | Security-focused review (OWASP Top 10, injection, XSS, authn/authz, secrets, config, infrastructure security) |
+| `/917v-code-review:architecture [path \| GitHub link]` | Architecture and code quality (SOLID, DRY, layering, circular dependencies, modularity) |
+| `/917v-code-review:scan [path \| GitHub link] [--staged \| --branch <base> \| --range a..b]` | Quick triage in seconds: stack, pattern-based risk leads, import cycles. No agents and no validation, so it reports leads, not findings. Writes `scan.md` outside the repository |
 
 Common options: `--agents a,b` (run only these agents), `--skip a,b`, `--no-html`.
 
-You can also ask in plain words, for example "review this repo" or "do a security review of my branch against main". The `comprehensive-review` skill triggers automatically.
+You can also ask in plain words, for example "review this repo", "do a security review of my branch against main", or "review https://github.com/owner/repo". The `comprehensive-review` skill triggers automatically.
 
 ### Examples
 
@@ -36,7 +36,39 @@ You can also ask in plain words, for example "review this repo" or "do a securit
 /917v-code-review:architecture --no-html
 /917v-code-review:scan
 /917v-code-review:scan --branch main
+/917v-code-review:review https://github.com/owner/repo
+/917v-code-review:security https://github.com/owner/repo/tree/release-2.1
+/917v-code-review:review-diff https://github.com/owner/repo/pull/128
 ```
+
+### Reviewing a public GitHub repository from a link
+
+Every command accepts a public GitHub link in place of a path. `scripts/fetch-repo.py` downloads the repository to `~/.917v-code-review/repos/<owner>/<repo>` (never into your current project), and the review then runs on that copy exactly as it does on a local folder.
+
+| Link | What is reviewed |
+|---|---|
+| `github.com/<owner>/<repo>` | The default branch |
+| `…/tree/<branch, tag or commit>` | That ref. Branch names with `/` are resolved against the repository's real branches |
+| `…/tree/<ref>/<folder>` | Only that folder, at that ref |
+| `…/blob/<ref>/<file>` | That ref, with the file as the review's focus |
+| `…/commit/<sha>` · `…/releases/tag/<tag>` | That commit or tag |
+| `…/pull/<n>` | The pull request's changes against its base branch (diff review) |
+
+`https://`, no scheme, a trailing `.git`, and `git@github.com:<owner>/<repo>.git` all work. `--ref <branch|tag|commit>` overrides the ref in the link.
+
+- **Reports link to GitHub.** Every finding's location is a permanent link to the file and line at the reviewed commit, and every commit in Git History links to the commit on GitHub, in the Markdown reports, the dashboard ("View on GitHub"), and Explore. The header names the repository, ref, and commit.
+- **Git history.** By default the full history of the one branch is fetched, so security findings can be traced to the commits that introduced them. Repositories above 300 MB, or a full fetch that does not finish in four minutes, fall back to the latest commit only, and the reports say that the copy is shallow. `--full` forces full history; `--depth N` fetches only the latest N commits.
+- **Public repositories only.** No token, password, SSH key, or credential helper is ever used or asked for. A private or missing repository is reported and the review stops; clone a private repository yourself and review the local folder.
+- **Nothing from the repository runs.** No hooks, submodules, Git LFS downloads, installs, builds, or tests. Symbolic links are checked out as plain text files, so a link pointing outside the copy cannot make the review read another file on your machine. The copy cannot be pushed from.
+- **The repository's text is data, not instructions.** A README, comment, or `CLAUDE.md` in the downloaded code cannot direct the review; attempts are reported to you.
+- **Network.** Only `github.com` (Git over https) and, for the repository's size and a pull request's base branch, the public `api.github.com` (`--no-api` skips it). Nothing is uploaded.
+
+```bash
+python3 scripts/fetch-repo.py --list                                  # the downloaded copies
+python3 scripts/fetch-repo.py --remove https://github.com/owner/repo  # delete one
+```
+
+A copy is reused while it is up to date and replaced when the ref has moved. Only folders this script created are ever replaced or deleted.
 
 ## How a review runs
 
@@ -195,7 +227,7 @@ An example report generated from the bundled NestJS fixture is in [`examples/nes
 ## Review principles
 
 - Read-only. Nothing is modified, installed, built, executed, staged, or committed in the target repository.
-- No source code is sent to external services, including online audit tools, unless you authorize it in the conversation.
+- No source code is sent to external services, including online audit tools, unless you authorize it in the conversation. The only download the plugin makes itself is a public GitHub repository you gave a link to.
 - No invented paths, line numbers, vulnerabilities, or execution results. Unverifiable claims are rejected, and the rejections are listed in the report.
 - Secrets are never printed. Values are redacted in agent output, by the validator, and in the reports.
 - Recommendations respect the existing architecture and avoid new libraries unless they are genuinely needed.
@@ -245,7 +277,7 @@ Differences from the plugin: there are no slash commands (the mode comes from yo
 commands/                         the slash commands (review, review-diff, security, architecture wrap the skill; scan runs the scripts only)
 skills/comprehensive-review/      orchestration skill + references (schema, rubric, ownership, checklists)
 agents/                           the eight specialist reviewers (Read/Grep/Glob only)
-scripts/                          deterministic helpers (stdlib Python)
+scripts/                          deterministic helpers (stdlib Python); fetch-repo.py downloads a public GitHub repository for review
 templates/                        report templates, dashboard, Explore page, in-chat widget, 917V logo
 skill-src/SKILL.md                orchestrator for the standalone skill build
 tools/build-skill.py              packages the standalone skill into dist/ (git-ignored)
@@ -271,4 +303,5 @@ Validation results are recorded in [docs/VALIDATION.md](docs/VALIDATION.md).
 - **The import graph** resolves relative imports and tsconfig path aliases (JS/TS), Python packages, Java/Kotlin packages, and Go module packages. Other languages rely on the architecture agent's own reading.
 - **Signals are regex hints.** They speed up the agents but are never reported without an agent confirming them in context.
 - **Agent recall is not 100%.** The bundled fixtures measure it; see docs/VALIDATION.md.
+- **GitHub links are public-only and github.com-only.** Private repositories, GitHub Enterprise hosts, gists, and other Git hosts are not downloaded; review a local clone instead. A pull request link is compared with the base branch GitHub reports, or with the default branch when the public API is unavailable.
 - **Reports live outside the repository.** Tools scoped to the repository folder, such as an editor's file tree or the Claude app's file pane, don't show them. Open the folder path printed at the end of the run, or pass `--out <dir>` to put the reports somewhere you browse.

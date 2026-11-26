@@ -161,6 +161,8 @@ a.ref::after { content:"↗"; margin-left:6px; font-size:11px; }
 .gc .gl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
 .gc b { font-size:14px; overflow-wrap:anywhere; }
 .gc .mono { font-family:var(--font-mono); font-size:12px; color:var(--fg-2); }
+.gc .mono a, .loc a, header.bar .meta a { color:var(--accent-text); font-weight:600; text-decoration:none; }
+.gc .mono a:hover, .loc a:hover, header.bar .meta a:hover { text-decoration:underline; }
 .gc .gs { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
 .pid { font-family:var(--font-mono); font-size:12px; color:var(--muted); margin-top:12px; }
 .tags { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
@@ -283,6 +285,22 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
     if (VIA_VIEWER) return "_src/" + encPath(file) + (line ? "?line=" + line + (end && end > line ? "&end=" + end : "") + "#L" + line : "");
     return data.link_base != null ? data.link_base + "/" + encPath(file) : null;
   }
+  /* Fetched from GitHub: permanent links to the reviewed commit. Built by the report script, never by hand. */
+  var SRC = data.source && data.source.blob_base ? data.source : null;
+  function ghFile(file, line, end) {
+    if (!SRC || !file) return null;
+    return SRC.blob_base + "/" + file.split("/").map(encodeURIComponent).join("/") + (line ? "#L" + line + (end && end > line ? "-L" + end : "") : "");
+  }
+  function ghCommit(sha) { return SRC && /^[0-9a-f]{7,64}$/.test(sha || "") ? SRC.commit_base + sha : null; }
+  function sourceMeta(box) {
+    if (!SRC) return;
+    box.appendChild(document.createTextNode(" · "));
+    var a = document.createElement("a");
+    a.href = SRC.pull_url || SRC.url; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = "GitHub: " + SRC.name + (SRC.pull ? " #" + SRC.pull : (SRC.ref ? " @ " + SRC.ref : ""));
+    box.appendChild(a);
+    if (SRC.history === "shallow") box.appendChild(document.createTextNode(" (shallow copy)"));
+  }
   function editorHref(scheme, file, line) {
     if (!data.source_root || !file) return null;
     const abs = String(data.source_root).replace(/\\/g, "/").replace(/\/+$/, "") + "/" + file;
@@ -300,6 +318,7 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
   document.title = "Explore — " + (data.repository || "code review");
   $("title").textContent = "Explore — " + (data.repository || "code review");
   $("meta").textContent = [data.review_type, data.scope_description, data.date, data.commit ? "commit " + data.commit : ""].filter(Boolean).join(" · ");
+  sourceMeta($("meta"));
 
   /* ---------- state ---------- */
   const STATE = { q: "", group: "file", sev: new Set(), cat: "", file: "", status: "" };
@@ -791,7 +810,11 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
       var d = el("div", { "class": "gc" });
       d.appendChild(el("span", { "class": "gl" }, label));
       d.appendChild(el("b", null, c.author || c.committer || "Unknown author"));
-      d.appendChild(el("span", { "class": "mono", title: c.commit || "" }, (c.short || "unknown commit") + " · " + (c.date || "date unknown")));
+      var hash = el("span", { "class": "mono", title: c.commit || "" }), gh = ghCommit(c.commit);
+      if (gh) hash.appendChild(el("a", { href: gh, target: "_blank", rel: "noopener", title: "Open this commit on GitHub" }, c.short || c.commit));
+      else hash.appendChild(document.createTextNode(c.short || "unknown commit"));
+      hash.appendChild(document.createTextNode(" · " + (c.date || "date unknown")));
+      d.appendChild(hash);
       if (c.summary) d.appendChild(el("span", { "class": "gs" }, c.summary));
       if (c.committer && c.author && c.committer !== c.author) d.appendChild(el("span", { "class": "gs" }, "Committed by " + c.committer));
       return d;
@@ -838,6 +861,8 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
     [["vscode", "Open in VS Code"], ["cursor", "Open in Cursor"]].forEach(e => {
       const h = editorHref(e[0], file, line); if (h) box.appendChild(el("a", { "class": "btn", href: h }, e[1]));
     });
+    const gh = ghFile(file, line, end);
+    if (gh) box.appendChild(el("a", { "class": "btn", href: gh, target: "_blank", rel: "noopener" }, "View on GitHub"));
     const fh = fileHref(file, line, end);
     if (fh) box.appendChild(el("a", { "class": "btn", href: fh, target: "_blank", rel: "noopener" }, VIA_VIEWER && line ? "View file at line " + line : "View file"));
     const cp = el("button", { type: "button", "class": "btn" }, "Copy location");
@@ -875,7 +900,8 @@ a.dash { font-size:12px; font-weight:600; color:var(--accent-text); }
       const ul = el("ul", { "class": "rel" });
       rel.forEach(l => {
         const li = el("li"); li.appendChild(el("span", { "class": "mono" }, "Also at " + locText(l.file, l.line)));
-        const vs = editorHref("vscode", l.file, l.line), fh = fileHref(l.file, l.line);
+        const vs = editorHref("vscode", l.file, l.line), fh = fileHref(l.file, l.line), gl = ghFile(l.file, l.line);
+        if (gl) li.appendChild(el("a", { href: gl, target: "_blank", rel: "noopener" }, "GitHub"));
         if (vs) li.appendChild(el("a", { href: vs }, "VS Code"));
         if (fh) li.appendChild(el("a", { href: fh, target: "_blank", rel: "noopener" }, "View file"));
         ul.appendChild(li);

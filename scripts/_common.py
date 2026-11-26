@@ -55,6 +55,7 @@ OWN_OUTPUTS = {MARKER, ".work", "executive-summary.md", "detailed-findings.md", 
                "architecture-review.md", "recommendations.md", "dashboard.html", "explore.html", "findings.json", "scan.md"}
 READ_ONLY_GIT = {"rev-parse", "ls-files", "diff", "merge-base", "status", "log", "show", "cat-file", "blame"}
 EXIT_OUTPUT_CONFLICT = 4
+SOURCE_MARKER = "917v-code-review.json"   # inside .git/ of a copy that fetch-repo.py downloaded from GitHub
 
 
 class ReadOnlyViolation(SystemExit):
@@ -135,6 +136,36 @@ def git(root, *args, timeout=None):
     if out.returncode != 0:
         raise RuntimeError("git %s failed: %s" % (" ".join(args), out.stderr.strip()))
     return out.stdout
+
+
+def review_source(root):
+    """Where the reviewed code came from, when fetch-repo.py downloaded it from GitHub; otherwise None.
+
+    Only used to label the reports and to link findings and commits to github.com. The links are built
+    here from the validated owner and repository names and the commit that is checked out now.
+    """
+    from urllib.parse import quote
+    if not is_git_repo(root):
+        return None
+    try:
+        meta = load_json(os.path.join(git(root, "rev-parse", "--absolute-git-dir").strip(), SOURCE_MARKER))
+        head = git(root, "rev-parse", "HEAD").strip()
+        prefix = git(root, "rev-parse", "--show-prefix").strip().strip("/")
+    except (RuntimeError, OSError, ValueError):
+        return None
+    owner, repo = (meta or {}).get("owner"), (meta or {}).get("repo")
+    if meta.get("provider") != "github" or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}", str(owner)) or \
+            not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", str(repo)) or not re.fullmatch(r"[0-9a-f]{40,64}", head):
+        return None
+    url = "https://github.com/%s/%s" % (owner, repo)
+    pull = meta.get("pull") if isinstance(meta.get("pull"), int) else None
+    return {"provider": "github", "name": "%s/%s" % (owner, repo), "url": url,
+            "ref": str(meta.get("ref") or "")[:200] or None, "ref_type": str(meta.get("ref_type") or "")[:20] or None,
+            "commit": head, "short": head[:8], "subdir": prefix, "pull": pull,
+            "history": "shallow" if meta.get("history") == "shallow" else "full",
+            "blob_base": "%s/blob/%s%s" % (url, head, "/" + quote(prefix) if prefix else ""),
+            "commit_base": url + "/commit/",
+            "pull_url": "%s/pull/%d" % (url, pull) if pull else None}
 
 
 def iter_repo_files(root, exclude_prefixes=(OUTPUT_DIR,)):

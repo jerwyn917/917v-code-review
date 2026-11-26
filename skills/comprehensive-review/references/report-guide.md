@@ -52,7 +52,7 @@ Rules:
 | `explore.html` | Explore: the same validated findings as an interactive floor plan. Wings are directories (or categories, or severities), rooms are files, and each tile is one finding. Pan and zoom, search, filter by severity, category, file and status, a detail panel with every field, previous/next, and links to the finding's file and line. Linked both ways with `dashboard.html`; `explore.html#<ID>` opens one finding. Draws only what is in `findings.json`. Loads GSAP from cdnjs and Motion from jsDelivr for animation, and works without them |
 | `.work/chat-widget.html` | In-chat results widget (HTML fragment) for a host's inline visual tool; not a report. With `--serve` its "Explore" and "Open the full dashboard" buttons are direct links to the loopback viewer |
 | `.work/viewer.json` | State of the loopback viewer started by `--serve` (`scripts/serve-reports.py`): port, token, URLs. Removed when the viewer stops |
-| `findings.json` | Validated findings for tooling and CI. Security findings carry `git` (introducing commit and latest change), and `git_attribution` summarizes how many were traced |
+| `findings.json` | Validated findings for tooling and CI. `source` names the GitHub repository, ref, and commit when the code was downloaded from a link; the reports then link locations and commits to github.com. Security findings carry `git` (introducing commit and latest change), and `git_attribution` summarizes how many were traced |
 
 ## How every finding is presented
 

@@ -95,7 +95,7 @@ def first_commit(root, sha, path, line):
     return (_commit(*entries[-1]), len(entries)) if entries else (None, 0)
 
 
-def trace(root, f, shallow):
+def trace(root, f, shallow, top=None):
     if f.get("evidence_type") == "absence":
         return {"status": "untraced", "reason": "the finding is about something that is missing, so there is no "
                                                 "line of code to trace"}
@@ -127,7 +127,10 @@ def trace(root, f, shallow):
     newest = max(committed, key=lambda e: int(e["info"].get("committer-time", 0)))
     out = {"status": "traced", "lines": span, "last_changed": info(newest)}
     try:
-        introduced, changes = first_commit(root, first["sha"], first["info"].get("filename") or path,
+        # blame names the file from the top of the repository, so follow it from there (the reviewed
+        # root may be a folder inside the repository).
+        named = first["info"].get("filename")
+        introduced, changes = first_commit(top if top and named else root, first["sha"], named or path,
                                            first["orig_line"])
     except Exception:
         introduced, changes = None, 0
@@ -165,12 +168,16 @@ def attribute(root, findings):
     except Exception:
         shallow = False
     summary.update(available=True, shallow=shallow)
+    try:
+        top = git(root, "rev-parse", "--show-toplevel", timeout=CALL_TIMEOUT).strip() or None
+    except Exception:
+        top = None
     started = time.time()
     for f in targets:
         if time.time() - started > BUDGET_SECONDS:
             f["git"] = {"status": "untraced", "reason": "the time budget for reading Git history was used up"}
         else:
-            f["git"] = trace(root, f, shallow)
+            f["git"] = trace(root, f, shallow, top)
         summary[f["git"]["status"]] += 1
     return summary
 

@@ -31,10 +31,11 @@ import math
 import os
 import re
 import sys
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import (CATEGORIES, SEVERITIES, check_output_path, claim_output_dir, dump_json,  # noqa: E402
-                     git, is_git_repo, load_json)
+                     git, is_git_repo, load_json, review_source)
 
 PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES = os.path.join(PLUGIN_ROOT, "templates")
@@ -140,6 +141,14 @@ def reference_payload():
             "owasp": {code: {"name": dict(OWASP)[code], "url": OWASP_URL % slug} for code, slug in OWASP_SLUG.items()}}
 
 
+def commit_md(c):
+    """A commit hash for Markdown: a link to the commit on GitHub when the code was fetched from there."""
+    short = "`%s`" % c.get("short")
+    if SOURCE and re.fullmatch(r"[0-9a-f]{7,64}", str(c.get("commit") or "")):
+        return "[%s](%s%s)" % (short, SOURCE["commit_base"], c["commit"])
+    return short
+
+
 def git_person(c):
     who = c.get("author") or c.get("committer") or "unknown author"
     if c.get("committer") and c.get("author") and c["committer"] != c["author"]:
@@ -155,8 +164,8 @@ def git_lines(f):
     if g.get("status") != "traced":
         return ["_Not traced: %s._" % (g.get("reason") or "no Git history for these lines")]
     def one(label, c):
-        return "- **%s:** %s · `%s` · %s — %s" % (label, cell(git_person(c)), c.get("short"), c.get("date") or "date unknown",
-                                               cell(c.get("summary") or ""))
+        return "- **%s:** %s · %s · %s — %s" % (label, cell(git_person(c)), commit_md(c), c.get("date") or "date unknown",
+                                              cell(c.get("summary") or ""))
     where = "`%s:%s`" % (f["file"], g.get("lines") or f["line"])
     if g.get("same"):
         out = [one("Introduced by", g["introduced"]), "- No later commit has changed %s." % where]
@@ -178,9 +187,9 @@ def git_table(findings):
     for f in rows:
         g = f["git"]
         i, l = g["introduced"], g["last_changed"]
-        last = ["same", "", ""] if g.get("same") else [cell(git_person(l)), "`%s`" % l.get("short"), l.get("date") or ""]
-        out.append("| %s | `%s:%s` | %s | `%s` | %s | %s | %s | %s |" % (
-            f["id"], f["file"], g.get("lines") or f["line"], cell(git_person(i)), i.get("short"), i.get("date") or "",
+        last = ["same", "", ""] if g.get("same") else [cell(git_person(l)), commit_md(l), l.get("date") or ""]
+        out.append("| %s | `%s:%s` | %s | %s | %s | %s | %s | %s |" % (
+            f["id"], f["file"], g.get("lines") or f["line"], cell(git_person(i)), commit_md(i), i.get("date") or "",
             last[0], last[1], last[2]))
     return "\n".join(out)
 
@@ -207,6 +216,7 @@ def git_summary(fdata):
 
 
 LINK_BASE = "../.."   # path from the report folder to the repository root; set by render()
+SOURCE = None          # _common.review_source(): set by render() when the code was fetched from GitHub
 
 
 def link_base(root, out_dir):
@@ -217,7 +227,21 @@ def link_base(root, out_dir):
 
 
 def src_link(path, line):
+    if SOURCE:                      # a permanent link to the reviewed commit on GitHub
+        return "[`%s:%s`](%s/%s#L%s)" % (path, line, SOURCE["blob_base"], urllib.parse.quote(path), line)
     return "[`%s:%s`](%s/%s#L%s)" % (path, line, LINK_BASE, path, line)
+
+
+def source_md(source):
+    """One line for the reports saying where a fetched repository came from."""
+    what = {"branch": "branch `%s`", "tag": "tag `%s`", "commit": "commit `%s`"}.get(source.get("ref_type"), "`%s`")
+    what = "[pull request #%d](%s)" % (source["pull"], source["pull_url"]) if source.get("pull") else \
+        what % cell(source.get("ref") or source["short"])
+    text = "[%s](%s), %s at commit [`%s`](%s%s)" % (source["name"], source["url"], what, source["short"],
+                                                   source["commit_base"], source["commit"])
+    if source.get("subdir"):
+        text += ", folder `%s`" % cell(source["subdir"])
+    return text + (" (shallow copy)" if source.get("history") == "shallow" else "")
 
 
 def link(f, line=None):
@@ -423,8 +447,9 @@ def chat_widget(fdata, stack, common, hl, explore=False, viewer=None):
 
 def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None, html=False, widget_path=None,
            viewer=None):
-    global LINK_BASE
+    global LINK_BASE, SOURCE
     LINK_BASE = link_base(root, out_dir)
+    SOURCE = review_source(root)
     findings = fdata["findings"]
     totals = fdata["totals"]
     hl = health(findings)
@@ -432,7 +457,8 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
     review_type = summary.get("review_type") or "Full codebase review"
     scope_desc = scope["description"] if scope else summary.get("scope_description") or "entire repository"
     common = {
-        "repository": summary.get("repository") or os.path.basename(os.path.abspath(root)),
+        "repository": (SOURCE["name"] + ("/" + SOURCE["subdir"] if SOURCE["subdir"] else "")) if SOURCE else
+        summary.get("repository") or os.path.basename(os.path.abspath(root)),
         "review_type": review_type, "date": date, "scope_description": scope_desc,
     }
     by_sev = lambda sevs: [f for f in findings if f["severity"] in sevs]
@@ -483,7 +509,8 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
     dep = summary.get("dependency_analysis") or "_Not provided._"
     files = {
         "executive-summary.md": fill("executive-summary.md", dict(common, **{
-            "commit": commit_info(root), "plugin_version": plugin_version(),
+            "commit": commit_info(root) + (" · fetched from GitHub: " + source_md(SOURCE) if SOURCE else ""),
+            "plugin_version": plugin_version(),
             "agents_run": ", ".join(summary.get("agents_run") or sorted((fdata.get("coverage") or {}).keys())) or "—",
             "overall_summary": summary.get("overall_summary") or "_Not provided._",
             "health_rating": hl["rating"], "health_score": hl["score"],
@@ -530,7 +557,7 @@ def render(root, fdata, stack, summary, scope=None, integrity=None, out_dir=None
         payload = dict(common, commit=commit_info(root), totals=totals, health=hl, findings=findings,
                        files_considered=(stack or {}).get("file_count"), validation=fdata.get("validation") or {},
                        sections=SECTIONS, reference_urls=reference_payload(),
-                       git_attribution=fdata.get("git_attribution"))
+                       git_attribution=fdata.get("git_attribution"), source=SOURCE)
         files["dashboard.html"] = fill("dashboard.html", {"data_json": script_json(payload),
                                                           "logo_data_uri": logo_data_uri()})
         # Explore: the same findings as a navigable floor plan. link_base and source_root only build links

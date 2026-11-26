@@ -29,7 +29,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from _common import claim_output_dir, dump_json  # noqa: E402
+from _common import claim_output_dir, dump_json, review_source  # noqa: E402
 
 PLUGIN_ROOT = os.path.dirname(HERE)
 
@@ -224,6 +224,10 @@ def main():
                "skipped_agents": stack.get("skipped_agents", [])}
     if scope:
         summary.update(files_changed=scope["files_changed"], lines_changed=scope["lines_changed"])
+    source = review_source(root)
+    if source:                                   # the code was downloaded from GitHub by fetch-repo.py
+        summary["source"] = {k: source[k] for k in ("name", "url", "ref", "ref_type", "short", "subdir", "pull",
+                                                    "history")}
 
     if a.mode == "scan":
         render_scan = _load("render-scan")

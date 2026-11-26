@@ -23,7 +23,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import (CATEGORIES, CONFIDENCES, REDACTED, SEVERITIES, SEVERITY_RANK, STATUSES,  # noqa: E402
-                     check_output_path, dump_json, eprint, load_json, read_text, redact, rel_inside, secret_values)
+                     check_output_path, dump_json, eprint, load_json, read_text, redact, rel_inside, review_source,
+                     secret_values)
 
 REQUIRED = ["severity", "category", "title", "description", "file", "line", "evidence", "impact",
             "recommendation", "confidence"]
@@ -425,6 +426,7 @@ def run(root, inputs, scope=None, merges=None, history=True):
     return {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "root": root,
+        "source": review_source(root),   # set when fetch-repo.py downloaded the code from GitHub
         "totals": {"findings": len(findings), "by_severity": by_sev, "by_category": by_cat, "by_status": by_status},
         "validation": {"submitted": len(accepted) + len(rejected), "accepted": len(accepted),
                        "rejected": len(rejected), "duplicates_merged": merged,

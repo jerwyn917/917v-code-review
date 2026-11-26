@@ -55,6 +55,8 @@ Every specialist agent returns **exactly one JSON object** and nothing else, opt
 
 ## Added by the validator, not by reviewers
 
+When the code was downloaded from a GitHub link, `findings.json` also has a top-level `source`: `name` (`owner/repo`), `url`, `ref`, `ref_type` (`branch`, `tag`, `commit`, or `pull`), `commit`, `subdir`, `pull`, `history` (`full` or `shallow`), and the `blob_base` and `commit_base` URLs the reports link to. It is `null` for a local repository.
+
 Reviewers never fill these in. `validate-findings.py` adds `id`, `reported_by`, `evidence_verified`, `validation_notes`, and, for security findings in a Git repository, `git`:
 
 ```json

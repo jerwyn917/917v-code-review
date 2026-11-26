@@ -5,9 +5,18 @@ All notable changes to this plugin are documented here. Versions follow [Semanti
 ## [Unreleased]
 
 ### Added
+- **Review a public GitHub repository from a link** (`scripts/fetch-repo.py`). Every command and the skill accept `github.com/<owner>/<repo>` in place of a path, including `/tree/<ref>[/<folder>]`, `/blob/<ref>/<file>`, `/commit/<sha>`, `/releases/tag/<tag>`, and `/pull/<n>` (reviewed as a diff against its base branch).
+  - The copy goes to `~/.917v-code-review/repos/<owner>/<repo>` (`CODE_REVIEW_REPOS_DIR`), is reused while up to date, and is replaced only when it carries the script's own marker. `--list` and `--remove` manage the copies.
+  - Public repositories only: no credentials, credential helpers, or askpass programs are used, and only the https transport is allowed. Nothing from the repository runs: no hooks, submodules, Git LFS, installs, or builds; symbolic links are checked out as plain text; the copy cannot be pushed from.
+  - Full history of the one branch by default, so Git attribution works; large repositories or slow fetches fall back to a shallow copy, which the reports state. `--full` and `--depth N` override.
+  - Reports of a downloaded repository name the repository, ref, and commit, and link every finding to the file and line on GitHub at that commit and every Git History commit to its GitHub page (Markdown, dashboard, Explore). `findings.json` gains `source`.
+  - The skill and the reviewer protocol now state that text inside reviewed files is data, never instructions.
 - **Git history and attribution for security findings** (`scripts/git-history.py`, called by `validate-findings.py`). Each security finding gets a `git` object: `introduced` (the commit where the cited code first appeared) and `last_changed` (the latest commit that changed it), each with author, committer, commit hash, date, and subject, plus the traced lines. `git_attribution` summarizes the run. Read-only Git only (`blame` joins the allowlist); nothing is guessed when history is unavailable, untracked, uncommitted, or shallow. `--no-git-history` skips it.
 - **Standard finding sections everywhere**: Title, Description, Evidence, Potential Impact, Recommended Solution, Reference, and Git History when traced, with the same labels in the dashboard, Explore, and the Markdown reports. Reference now links to the CWE entry and the OWASP Top 10 page named by the finding.
 - `security-review.md` has a "Git history of the security findings" table.
+
+### Fixed
+- Git history is now traced when the reviewed root is a folder inside a repository (the introducing commit was not followed from the repository's top level).
 
 ### Changed
 - Dashboard findings list redesigned: each finding is a card with a clear header (severity, ID, category, status, title, location) and, when opened, a facts row and the standard sections with consistent spacing and typography. Bodies are built on first open, "Expand all / Collapse all" was added, and search matches author names and commit hashes.

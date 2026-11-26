@@ -1,6 +1,6 @@
 ---
 description: Review changed code only — uncommitted (default), staged, a branch vs its base, or a commit range
-argument-hint: "[--staged | --branch <base> | --range <a>..<b>] [--agents a,b] [--no-html]"
+argument-hint: "[GitHub pull request link] [--staged | --branch <base> | --range <a>..<b>] [--agents a,b] [--no-html]"
 ---
 
 Run the 917Ventures **Git diff review**.
@@ -15,5 +15,6 @@ Diff selectors:
 - `--staged`: only what is staged.
 - `--branch <base>`: everything on the current branch since it diverged from `<base>`, e.g. `--branch main`. This is what a pull request contains.
 - `--range <a>..<b>`: an explicit commit range.
+- A public GitHub pull request link (`https://github.com/<owner>/<repo>/pull/<n>`): the pull request is downloaded to `~/.917v-code-review/repos/` and reviewed against its base branch. No selector is needed.
 
 The review is **analysis only**: it never edits project files, never applies fixes, and never stages, commits, stashes, or checks out anything. Reports go to a folder outside the repository.

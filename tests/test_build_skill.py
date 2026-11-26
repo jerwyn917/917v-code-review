@@ -32,6 +32,7 @@ class BuildSkillTest(unittest.TestCase):
                     "references/reviewer-protocol.md", "references/reviewers/security-reviewer.md"]:
             self.assertTrue(os.path.isfile(os.path.join(self.dst, rel)), rel)
         self.assertFalse(os.path.exists(os.path.join(self.dst, "scripts", "welcome.py")))   # plugin-only install hook
+        self.assertTrue(os.path.isfile(os.path.join(self.dst, "scripts", "fetch-repo.py")))   # GitHub links work in the standalone skill
         self.assertEqual(len(self.names), 8)
 
     def test_no_plugin_paths_left(self):

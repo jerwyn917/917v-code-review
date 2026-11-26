@@ -39,6 +39,7 @@ validate = load("validate-findings")
 render = load("render-reports")
 serve = load("serve-reports")
 history = load("git-history")
+fetch = load("fetch-repo")
 
 
 os.environ[_common.OUT_ENV] = tempfile.mkdtemp(prefix="cr-out-")   # never write to ~ during tests
@@ -779,6 +780,204 @@ class TestWelcomeHook(unittest.TestCase):
         with open(os.path.join(ROOT, "hooks", "hooks.json"), encoding="utf-8") as f:
             hooks = json.load(f)["hooks"]["SessionStart"]
         self.assertIn("scripts/welcome.py", hooks[0]["hooks"][0]["command"])
+
+
+class TestFetchRepo(unittest.TestCase):
+    """fetch-repo.py: review a public GitHub repository from a link. A local bare repository stands in for
+    github.com, so the tests need no network."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="cr-gh-")
+        self.work = os.path.join(self.tmp, "work")
+        self.remote = os.path.join(self.tmp, "remote")
+        os.makedirs(os.path.join(self.work, "src"))
+        os.makedirs(os.path.join(self.remote, "acme"))
+        self.bare = os.path.join(self.remote, "acme", "widgets.git")
+        self.base = "file://" + self.remote
+        self.old_env = os.environ.get(fetch.REPOS_ENV)
+        os.environ[fetch.REPOS_ENV] = os.path.join(self.tmp, "repos")
+        subprocess.run(["git", "-C", self.work, "init", "-q", "-b", "main"], check=True, capture_output=True)
+        self.write("src/app.js", "const sql = 'SELECT * FROM t WHERE id=' + req.query.id;\n")
+        self.write("README.md", "# widgets\n")
+        os.symlink("/etc/hosts", os.path.join(self.work, "outside"))
+        self.commit("Ana Cruz", "first")
+        git(self.work, "tag", "v1.0")
+        git(self.work, "checkout", "-q", "-b", "feature/login")
+        self.write("src/app.js", "const sql = 'SELECT * FROM t WHERE id=' + req.query.id;\neval(req.body.code);\n")
+        self.commit("Ben Reyes", "add eval")
+        git(self.work, "checkout", "-q", "main")
+        self.write("README.md", "# widgets\nmore\n")
+        self.commit("Ana Cruz", "docs")
+        subprocess.run(["git", "clone", "-q", "--bare", self.work, self.bare], check=True, capture_output=True)
+        git(self.bare, "update-ref", "refs/pull/7/head", "refs/heads/feature/login")
+
+    def tearDown(self):
+        if self.old_env is None:
+            os.environ.pop(fetch.REPOS_ENV, None)
+        else:
+            os.environ[fetch.REPOS_ENV] = self.old_env
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, rel, text):
+        with open(os.path.join(self.work, rel), "w") as fh:
+            fh.write(text)
+
+    def commit(self, author, message):
+        env = dict(os.environ, GIT_AUTHOR_NAME=author, GIT_AUTHOR_EMAIL="a@example.com", GIT_COMMITTER_NAME=author,
+                   GIT_COMMITTER_EMAIL="a@example.com")
+        subprocess.run(["git", "-C", self.work, "add", "-A"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", self.work, "commit", "-q", "-m", message], check=True, capture_output=True, env=env)
+
+    def rev(self, repo, name):
+        return subprocess.run(["git", "-C", repo, "rev-parse", name], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def get(self, link, **kw):
+        return fetch.fetch(link, remote_base=self.base, **kw)
+
+    def test_links(self):
+        ok = {
+            "https://github.com/acme/widgets": ("default", ""),
+            "github.com/acme/widgets.git": ("default", ""),
+            "git@github.com:acme/widgets.git": ("default", ""),
+            "https://www.github.com/acme/widgets/issues/3?x=1#y": ("default", ""),
+            "https://github.com/acme/widgets/tree/feature/login/src": ("tree", "feature/login/src"),
+            "https://github.com/acme/widgets/blob/main/src/app.js": ("blob", "main/src/app.js"),
+            "https://github.com/acme/widgets/commit/0123abc": ("commit", "0123abc"),
+            "https://github.com/acme/widgets/releases/tag/v1.0": ("tag", "v1.0"),
+            "https://github.com/acme/widgets/pull/7/files": ("pull", ""),
+        }
+        for link, (kind, rest) in ok.items():
+            spec = fetch.parse_url(link)
+            self.assertEqual((spec["owner"], spec["repo"], spec["kind"], spec["rest"]), ("acme", "widgets", kind, rest), link)
+        self.assertEqual(fetch.parse_url("https://github.com/acme/widgets/pull/7")["number"], 7)
+        for link in ("https://gitlab.com/acme/widgets", "https://gist.github.com/acme/abc", "https://github.com/acme",
+                     "https://user:secret@github.com/acme/widgets", "ftp://github.com/acme/widgets",
+                     "https://github.com/acme/widgets/tree/../../etc", "https://github.com/-bad/widgets",
+                     "https://github.com/acme/wid gets", "https://github.com/acme/widgets/commit/not-a-hash",
+                     "/some/local/path", ""):
+            with self.assertRaises(fetch.FetchError, msg=link) as cm:
+                fetch.parse_url(link)
+            self.assertEqual(cm.exception.code, fetch.EXIT_BAD_LINK)
+        out = subprocess.run([sys.executable, os.path.join(SCRIPTS, "fetch-repo.py"), "https://gitlab.com/acme/widgets"],
+                             capture_output=True, text=True)
+        self.assertEqual(out.returncode, 2)
+        self.assertEqual(json.loads(out.stdout)["reason"], "invalid_link")
+
+    def test_download_reuse_and_update(self):
+        r = self.get("https://github.com/acme/widgets")
+        clone = os.path.join(self.tmp, "repos", "acme", "widgets")
+        self.assertEqual((r["root"], r["clone"], r["reused"], r["history"]), (clone, clone, False, "full"))
+        self.assertEqual(r["source"]["commit"], self.rev(self.bare, "refs/heads/main"))
+        self.assertEqual((r["source"]["name"], r["source"]["ref"], r["source"]["ref_type"]), ("acme/widgets", "main", "branch"))
+        self.assertTrue(os.path.isfile(os.path.join(clone, "src", "app.js")))
+        self.assertEqual(sorted(os.listdir(os.path.join(self.tmp, "repos", "acme"))), ["widgets"])   # no temp folder left
+        self.assertTrue(self.get("https://github.com/acme/widgets")["reused"])
+        self.write("README.md", "# widgets\nnewer\n")
+        self.commit("Ana Cruz", "newer")
+        git(self.work, "push", "-q", self.bare, "main")
+        again = self.get("https://github.com/acme/widgets")
+        self.assertFalse(again["reused"])
+        self.assertEqual(again["source"]["commit"], self.rev(self.work, "main"))
+        self.assertEqual(len(fetch.listing()), 1)
+        self.assertTrue(fetch.remove(clone))
+        self.assertFalse(os.path.exists(clone))
+        with self.assertRaises(fetch.FetchError) as cm:
+            self.get("https://github.com/acme/missing")
+        self.assertEqual(cm.exception.code, fetch.EXIT_FETCH_FAILED)
+
+    def test_refs_folders_tags_and_pull_requests(self):
+        r = self.get("github.com/acme/widgets/tree/feature/login/src")          # a branch name with a slash, then a folder
+        self.assertEqual((r["source"]["ref"], r["source"]["subdir"]), ("feature/login", "src"))
+        self.assertTrue(r["root"].endswith(os.path.join("widgets", "src")))
+        self.assertEqual(_common.review_source(r["root"])["blob_base"],
+                         "https://github.com/acme/widgets/blob/%s/src" % r["source"]["commit"])
+        r = self.get("https://github.com/acme/widgets/blob/main/src/app.js")
+        self.assertEqual((r["source"]["ref"], r["focus"], r["root"]), ("main", "src/app.js", r["clone"]))
+        r = self.get("https://github.com/acme/widgets/releases/tag/v1.0", depth=1)
+        self.assertEqual((r["source"]["ref_type"], r["history"], r["depth"]), ("tag", "shallow", 1))
+        self.assertEqual(r["source"]["commit"], self.rev(self.work, "v1.0^{commit}"))
+        self.assertTrue(history.attribute(r["root"], [])["shallow"])
+        r = self.get("https://github.com/acme/widgets", ref="feature/login")
+        self.assertEqual(r["source"]["commit"], self.rev(self.work, "feature/login"))
+        r = self.get("https://github.com/acme/widgets/commit/" + self.rev(self.work, "v1.0^{commit}")[:10])
+        self.assertEqual((r["source"]["ref_type"], r["source"]["commit"]), ("commit", self.rev(self.work, "v1.0^{commit}")))
+        with self.assertRaises(fetch.FetchError) as cm:
+            self.get("https://github.com/acme/widgets/tree/no-such-branch")
+        self.assertEqual(cm.exception.reason, "ref_not_found")
+        # A pull request: its head is checked out, and "diff" is what it changes against its base.
+        r = self.get("https://github.com/acme/widgets/pull/7")
+        self.assertEqual((r["source"]["pull"], r["source"]["commit"]), (7, self.rev(self.work, "feature/login")))
+        self.assertEqual(r["diff"], {"range": self.rev(self.work, "v1.0^{commit}") + "..HEAD", "base": "main", "pull": 7})
+        scope = diffscope.compute(r["root"], "range", rng=r["diff"]["range"])
+        self.assertEqual([(f["file"], f["ranges"]) for f in scope["files"]], [("src/app.js", [[2, 2]])])
+
+    def test_downloaded_code_is_contained(self):
+        r = self.get("https://github.com/acme/widgets")
+        clone = r["clone"]
+        link = os.path.join(clone, "outside")                 # a symlink in the repository pointing outside it
+        self.assertFalse(os.path.islink(link))
+        with open(link) as fh:
+            self.assertEqual(fh.read(), "/etc/hosts")
+        cfg = lambda key: subprocess.run(["git", "-C", clone, "config", "--get", key], capture_output=True,
+                                         text=True).stdout.strip()
+        self.assertEqual(cfg("core.symlinks"), "false")
+        self.assertEqual(cfg("core.hooksPath"), os.devnull)
+        self.assertTrue(cfg("remote.origin.pushurl").startswith("no-push://"))
+        self.assertFalse(os.path.isdir(os.path.join(clone, ".git", "hooks")))
+        self.assertEqual(subprocess.run(["git", "-C", clone, "status", "--porcelain"], capture_output=True,
+                                        text=True).stdout, "")
+        env = fetch._env("https")
+        self.assertEqual((env["GIT_TERMINAL_PROMPT"], env["GIT_ALLOW_PROTOCOL"], env["GIT_LFS_SKIP_SMUDGE"]), ("0", "https", "1"))
+        self.assertNotIn("GIT_ASKPASS", env)
+        self.assertIn("credential.helper=", fetch.SAFE)
+        # A folder this script did not create is never replaced or deleted.
+        mine = fetch.clone_path("acme", "other")
+        os.makedirs(mine)
+        with open(os.path.join(mine, "keep.txt"), "w") as fh:
+            fh.write("mine")
+        subprocess.run(["git", "clone", "-q", "--bare", self.work, os.path.join(self.remote, "acme", "other.git")],
+                       check=True, capture_output=True)
+        for call in (lambda: self.get("https://github.com/acme/other"), lambda: fetch.remove(mine)):
+            with self.assertRaises(fetch.FetchError) as cm:
+                call()
+            self.assertEqual(cm.exception.reason, "not_ours")
+        self.assertTrue(os.path.isfile(os.path.join(mine, "keep.txt")))
+
+    def test_reports_link_to_github(self):
+        r = self.get("https://github.com/acme/widgets/tree/feature/login")
+        sha = r["source"]["commit"]
+        raw = os.path.join(self.tmp, "raw.json")
+        with open(raw, "w") as fh:
+            json.dump({"agent": "security-reviewer", "files_reviewed": ["src/app.js"], "findings": [dict(
+                severity="High", category="Security", title="SQL injection in the query", description="d",
+                file="src/app.js", line=1, evidence="const sql = 'SELECT * FROM t WHERE id=' + req.query.id;",
+                impact="i", recommendation="Use parameters.", confidence="High", status="Confirmed", cwe="CWE-89",
+                owasp="A03:2021")]}, fh)
+        fdata = validate.run(r["root"], [raw])
+        self.assertEqual((fdata["source"]["name"], fdata["source"]["commit"]), ("acme/widgets", sha))
+        g = fdata["findings"][0]["git"]
+        self.assertEqual((g["status"], g["introduced"]["author"]), ("traced", "Ana Cruz"))
+        out = os.path.join(self.tmp, "out")
+        files, _ = render.render(r["root"], fdata, None, {}, out_dir=out, html=True)
+        blob = "https://github.com/acme/widgets/blob/%s/src/app.js#L1" % sha
+        self.assertIn("[`src/app.js:1`](%s)" % blob, files["detailed-findings.md"])
+        self.assertIn("(https://github.com/acme/widgets/commit/%s)" % g["introduced"]["commit"], files["security-review.md"])
+        self.assertIn("fetched from GitHub: [acme/widgets](https://github.com/acme/widgets), branch `feature/login`",
+                      files["executive-summary.md"])
+        self.assertIn("**Repository:** acme/widgets", files["detailed-findings.md"])
+        for page in ("dashboard.html", "explore.html"):
+            data = json.loads(re.search(r'<script id="review-data" type="application/json">(.*?)</script>',
+                                        files[page], re.S).group(1))
+            self.assertEqual(data["source"]["blob_base"], "https://github.com/acme/widgets/blob/" + sha)
+            self.assertIn("ghFile(", files[page])
+        # A local repository has no source, so its reports keep their local links.
+        self.assertIsNone(_common.review_source(self.work))
+        # Reviewing one folder of the repository still traces history (paths are relative to that folder).
+        sub = self.get("https://github.com/acme/widgets/tree/feature/login/src")
+        f = dict(id="SEC-001", category="Security", file="app.js", line=2, evidence="x")
+        self.assertEqual(history.attribute(sub["root"], [f])["traced"], 1)
+        self.assertEqual(f["git"]["introduced"]["author"], "Ben Reyes")
 
 
 if __name__ == "__main__":
